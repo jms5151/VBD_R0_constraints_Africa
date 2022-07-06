@@ -62,7 +62,7 @@ R0_scatterplot(pred_R01 = R0_clim_only
                , filename = 'R0_scatter_clim_vs_pMI'
                , xLabel = 'R0 (climate only)'
                , yLabel = 'R0 (climate & ancestry model)'
-               , labelPoints = TRUE)
+               , labelPoints = FALSE)
 
 # climate vs biting rate + pMI ancestry
 R0_scatterplot(pred_R01 = R0_clim_only
@@ -91,6 +91,12 @@ plot(aaa, R0_aaa_OGD, type = 'l', ylab = 'R0', xlab = 'Ancestry', ylim = c(1, 3)
 lines(aaa, R0_aaa_KUM, type = 'l', lty = 2)
 legend('topleft', bty = 'n', lty = c(1,2), legend = c('OGD', 'KUM'))
 dev.off()
+
+# pdf('figures/R0_vs_ancestry_pMI_bite_rate_adj.pdf', height = 6, width = 8)
+# plot(aaa, R0_aaa_OGD, type = 'l', ylab = 'R0', xlab = 'Ancestry')
+# lines(aaa, R0_aaa_KUM, type = 'l', lty = 2)
+# legend('topleft', bty = 'n', lty = c(1,2), legend = c('OGD', 'KUM'))
+# dev.off()
 
 # R0 vs year ------
 
