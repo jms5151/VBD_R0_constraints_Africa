@@ -1,9 +1,10 @@
 # Model probability of biting rate
+library(drc)
 
 # load data
-survey_data <- read.csv('../data/combined_meta_colonies_fitted_clean_updated.csv')
+br_data <- read.csv('../data/combined_meta_allpops.csv')
+br_data <- subset(br_data, !is.na(prop_aaa_ancestry))
+colnames(br_data)[which(colnames(br_data) == 'prob')] <- 'prob_biting'
 
-# linear regression: this should be updated so it saturates, currently allows 
-# for biting rate reduction to exceed 1
-biting_rate_reduction_model <- lm(prob_biting ~ prop_aaa_ancestry, data = survey_data)
-
+# Michaelis-Menten model (asymptotic)
+biting_rate_reduction_model <- drm(prob_biting ~ prop_aaa_ancestry, data = br_data, fct = MM.2())

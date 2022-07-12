@@ -1,4 +1,5 @@
 # function to predict mosquito infection from ancestry data
+source('code/model_infection_given_ancestry.R')
 
 pred_pMI_ancestry <- function(df, location_code){
   if(!is.na(location_code)){

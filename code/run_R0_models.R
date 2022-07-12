@@ -6,13 +6,15 @@
 source('code/R0_model_functions.R')
 
 # source component models
-source('code/model_infection_given_ancestry.R')
 source('code/model_biting_rate_given_ancestry.R')
+source('code/function_predict_pMI_from_ancestry.R')
 
 # load data --------------------------------------------------------------------
 
 # climate, mosquito ancestry, and human population data for 27 survey locations
-survey_data <- read.csv('../data/combined_meta_colonies_fitted_clean_updated.csv')
+# survey_data <- read.csv('../data/combined_meta_colonies_fitted_clean_updated.csv')
+survey_data <- read.csv('../data/combined_meta_allpops.csv')
+survey_data <- subset(survey_data, !is.na(prop_aaa_ancestry))
 
 # time series data for two cities
 # columns: human pop, city human pop density, ancestry (by city)
@@ -82,21 +84,24 @@ source('code/functions_predict_R0_for_specific_locations.R')
 # predict R0 for two cities
 aaa <- seq(from = 0, to = 1, by = 0.01)
 
-R0_aaa_OGD <- pred_by_aaa(location_code = 'OGD')
-R0_aaa_KUM <- pred_by_aaa(location_code = 'KUM')
+R0_aaa_OGD_adj_pMI <- pred_by_aaa_adj_pMI(location_code = 'OGD')
+R0_aaa_KUM_adj_pMI <- pred_by_aaa_adj_pMI(location_code = 'KUM')
+
+R0_aaa_OGD_adj_pMI_br <- pred_by_aaa_adj_pMI_br(location_code = 'OGD')
+R0_aaa_KUM_adj_pMI_br <- pred_by_aaa_adj_pMI_br(location_code = 'KUM')
 
 # plot
 pdf('figures/R0_vs_ancestry_pMI_adj_only.pdf', height = 6, width = 8)
-plot(aaa, R0_aaa_OGD, type = 'l', ylab = 'R0', xlab = 'Ancestry', ylim = c(1, 3))
-lines(aaa, R0_aaa_KUM, type = 'l', lty = 2)
+plot(aaa, R0_aaa_OGD_adj_pMI, type = 'l', ylab = 'R0', xlab = 'Ancestry')
+lines(aaa, R0_aaa_KUM_adj_pMI, type = 'l', lty = 2)
 legend('topleft', bty = 'n', lty = c(1,2), legend = c('OGD', 'KUM'))
 dev.off()
 
-# pdf('figures/R0_vs_ancestry_pMI_bite_rate_adj.pdf', height = 6, width = 8)
-# plot(aaa, R0_aaa_OGD, type = 'l', ylab = 'R0', xlab = 'Ancestry')
-# lines(aaa, R0_aaa_KUM, type = 'l', lty = 2)
-# legend('topleft', bty = 'n', lty = c(1,2), legend = c('OGD', 'KUM'))
-# dev.off()
+pdf('figures/R0_vs_ancestry_pMI_bite_rate_adj.pdf', height = 6, width = 8)
+plot(aaa, R0_aaa_OGD_adj_pMI_br, type = 'l', ylab = 'R0', xlab = 'Ancestry')
+lines(aaa, R0_aaa_KUM_adj_pMI_br, type = 'l', lty = 2)
+legend('topleft', bty = 'n', lty = c(1,2), legend = c('OGD', 'KUM'))
+dev.off()
 
 # R0 vs year ------
 
