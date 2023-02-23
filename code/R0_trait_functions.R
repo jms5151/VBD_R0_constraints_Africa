@@ -58,7 +58,7 @@ mu_m <- function(temp){
 }
 
 # parasite development rate
-PDR <- function(temp){
+EIR <- function(temp){
   briere(temp, 6.65e-05, 10.68, 45.90)
 }
 
