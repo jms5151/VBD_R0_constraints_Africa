@@ -4,7 +4,7 @@
 library(tidyverse)
 
 # load data
-zikv_afr_panel <- read.delim('../data/reformatted_ZIKV_african_panel.txt')
+zikv_afr_panel <- read.delim('../VBD-data/reformatted_ZIKV_african_panel.txt')
 
 # Make population and virus factored data
 zikv_afr_panel[, c('Population', 'Virus')] <- lapply(

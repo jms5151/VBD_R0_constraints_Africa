@@ -28,19 +28,19 @@ inverted_quadratic <- function(x, c, T0, Tm){
 
 # Entomological parameters for the Ae. aegypti vector. 
 # eggs per female per day
-EFD <- function(temp){
-  briere(temp, 8.56e-03, 14.58, 34.61)
-}
+# EFD <- function(temp){
+#   briere(temp, 8.56e-03, 14.58, 34.61)
+# }
 
 # probability egg to adult survival
-pEA <- function(temp){
-  quadratic(temp, -5.99e-03, 13.56, 38.29)
-}
+# pEA <- function(temp){
+#   quadratic(temp, -5.99e-03, 13.56, 38.29)
+# }
 
 # mosquito development rate (1/larval development period)
-MDR <- function(temp){
-  briere(temp, 7.86e-05, 11.36, 39.17)
-}
+# MDR <- function(temp){
+#   briere(temp, 7.86e-05, 11.36, 39.17)
+# }
 
 # biting rate
 a <- function(temp){
@@ -53,7 +53,7 @@ pMI <- function(temp){
 }
 
 # adult mosquito mortality rate (1/adult lifespan)
-mu <- function(temp){
+mu_m <- function(temp){
   inverted_quadratic(temp, -1.48e-01, 9.16, 37.73)
 }
 

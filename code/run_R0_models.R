@@ -12,35 +12,36 @@ source('code/function_predict_pMI_from_ancestry.R')
 # load data --------------------------------------------------------------------
 
 # climate, mosquito ancestry, and human population data for 27 survey locations
-# survey_data <- read.csv('../data/combined_meta_colonies_fitted_clean_updated.csv')
-survey_data <- read.csv('../data/combined_meta_allpops.csv')
+# survey_data <- read.csv('../VBD-data/combined_meta_colonies_fitted_clean_updated.csv')
+survey_data <- read.csv('../VBD-data/combined_meta_allpops.csv')
 survey_data <- subset(survey_data, !is.na(prop_aaa_ancestry))
 
 # time series data for two cities
 # columns: human pop, city human pop density, ancestry (by city)
-ts_ancestry <- read.delim('../data/back_envelope_aaa_over_time.txt')
+ts_ancestry <- read.delim('../VBD-data/back_envelope_aaa_over_time.txt')
 
 # run alternative R0 models ----------------------------------------------------
 
 # R0 model - climate only ------
-R0_clim_only <- lapply(survey_data$bio.bio8_temp_wetq, function(x) R0_NGM(temp = x))
+R0_clim_only <- mapply(R0_NGM, temp = survey_data$bio.bio8_temp_wetq)
 
 # R0 model - climate + adjusted biting rate ------
 biting_rate_reduction <- predict(object = biting_rate_reduction_model, newdata = survey_data)
-R0_clim_bite_rate <- R0_NGM_adj_biting_rate(temp = survey_data$bio.bio8_temp_wetq, a_adjustment = biting_rate_reduction)
+R0_clim_bite_rate <- mapply(R0_NGM_adj_biting_rate, temp = survey_data$bio.bio8_temp_wetq, a_adjustment = biting_rate_reduction)
 
 # R0 model - climate + infection|ancestry ------
 pMI_ancestry_pred_surveys <- pred_pMI_ancestry(df = survey_data, location_code = NA)
-R0_clim_pMI <- R0_NGM_adj_pMI(temp = survey_data$bio.bio8_temp_wetq, pMI_ancestry = pMI_ancestry_pred_surveys)
+R0_clim_pMI <- mapply(R0_NGM_adj_pMI, temp = survey_data$bio.bio8_temp_wetq, pMI_ancestry = pMI_ancestry_pred_surveys)
 # results differs considerably if prop_aaa used instead of predicted pMI_ancestry 
 
 # R0 model - climate + infection|ancestry + transmission ------
 
 
 # R0 model - climate + infection|ancestry + adjusted biting rate ------
-R0_clim_pMI_bite_rate <- R0_NGM_adj_pMI_biting_rate(temp = survey_data$bio.bio8_temp_wetq
-                                                    , a_adjustment = biting_rate_reduction
-                                                    , pMI_ancestry = pMI_ancestry_pred_surveys)
+R0_clim_pMI_bite_rate <- mapply(R0_NGM_adj_pMI_biting_rate
+                                , temp = survey_data$bio.bio8_temp_wetq
+                                , a_adjustment = biting_rate_reduction
+                                , pMI_ancestry = pMI_ancestry_pred_surveys)
 
 # R0 model - climate + infection|ancestry + transmission + adjusted biting rate ------
 
@@ -84,11 +85,11 @@ source('code/functions_predict_R0_for_specific_locations.R')
 # predict R0 for two cities
 aaa <- seq(from = 0, to = 1, by = 0.01)
 
-R0_aaa_OGD_adj_pMI <- pred_by_aaa_adj_pMI(location_code = 'OGD')
-R0_aaa_KUM_adj_pMI <- pred_by_aaa_adj_pMI(location_code = 'KUM')
+R0_aaa_OGD_adj_pMI <- mapply(pred_by_aaa_adj_pMI, location_code = 'OGD')
+R0_aaa_KUM_adj_pMI <- mapply(pred_by_aaa_adj_pMI, location_code = 'KUM')
 
-R0_aaa_OGD_adj_pMI_br <- pred_by_aaa_adj_pMI_br(location_code = 'OGD')
-R0_aaa_KUM_adj_pMI_br <- pred_by_aaa_adj_pMI_br(location_code = 'KUM')
+R0_aaa_OGD_adj_pMI_br <- mapply(pred_by_aaa_adj_pMI_br, location_code = 'OGD')
+R0_aaa_KUM_adj_pMI_br <- mapply(pred_by_aaa_adj_pMI_br, location_code = 'KUM')
 
 # plot
 pdf('figures/R0_vs_ancestry_pMI_adj_only.pdf', height = 6, width = 8)
@@ -106,8 +107,8 @@ dev.off()
 # R0 vs year ------
 
 # predict R0 for two cities
-R0_pMI_OGD <- ts_pred_by_year(location_code = 'OGD')
-R0_pMI_KUM <- ts_pred_by_year(location_code = 'KUM')
+R0_pMI_OGD <- mapply(ts_pred_by_year, location_code = 'OGD')
+R0_pMI_KUM <- mapply(ts_pred_by_year, location_code = 'KUM')
 
 # plot results
 pdf('figures/R0_vs_year_pMI_bite_rate_adj.pdf', height = 6, width = 8)
