@@ -27,3 +27,25 @@ infection_model <- glm(
   , family = binomial(link = 'logit')
   , data = zikv_afr_panel
 )
+
+# model output
+summary(infection_model)
+
+# assess model fit
+# predict using same data to create model
+zikv_afr_panel_predY <- predict(object = infection_model, newdata = zikv_afr_panel, type = 'response')
+
+# turn probabilities into 0/1 response
+zikv_afr_panel_predY2 <- ifelse(zikv_afr_panel_predY < 0.5, 0, 1)
+
+# look at contingency table
+xtabs(~zikv_afr_panel_predY2 + zikv_afr_panel$Infection)
+
+# confusion matrix
+library(caret)
+
+confusionMatrix(
+  as.factor(unname(zikv_afr_panel_predY2))
+  , as.factor(zikv_afr_panel$Infection)
+  , dnn = c("Prediction")
+  )

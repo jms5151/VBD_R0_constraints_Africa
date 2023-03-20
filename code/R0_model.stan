@@ -158,10 +158,6 @@ generated quantities {
   vector[climate_N_new] lf_climate_new;             // lifespand (1/mosquito mortality rate)
   vector[climate_N_new] R0;                         // R0
   
-  ///////////////////////////////////////////////////////////////////////////
-  // need to figure out which parameters strongly diverge from mordecai et al
-  ///////////////////////////////////////////////////////////////////////////
-  
   // ppc alpha (biting rate)
   for (p in 1:b_climate_N){                         
     real alpha_climate_mu_ppc = alpha_climate_constant * alpha_climate_temp[p] * (alpha_climate_temp[p] - alpha_climate_Tmin) * sqrt(alpha_climate_Tmax - alpha_climate_temp[p]);
