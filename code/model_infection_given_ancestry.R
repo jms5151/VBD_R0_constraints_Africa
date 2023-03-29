@@ -49,3 +49,40 @@ confusionMatrix(
   , as.factor(zikv_afr_panel$Infection)
   , dnn = c("Prediction")
   )
+
+
+## new data
+zikv_cpv <- read.csv('../VBD-data/CPV-ZIKV.csv')
+
+# collapse into treatments and outcomes
+library(tidyverse)
+
+zikv_cpv_wide <- zikv_cpv %>%
+  group_by(Virus, Population, Titer) %>%
+  summarise(Infected = sum(Infection == 1), Trials = length(Infection))
+
+# add ancestry
+zikv_cpv_wide$aaa <- 0.23 # CPV
+zikv_cpv_wide$aaa[zikv_cpv_wide$Population == 'NGO'] <- 0.3738158
+zikv_cpv_wide$aaa[zikv_cpv_wide$Population == 'Gabon'] <-  0.073
+zikv_cpv_wide$aaa[zikv_cpv_wide$Population == 'Guadeloupe'] <- 1
+
+## test runs to calculate OID50
+test <- subset(zikv_cpv, Virus == 'ZIKV_Cambodia_2010' & Population == 'Guadeloupe')
+testMod <- glm(Infection ~ log(Titer), family = binomial(link = 'logit'), data = test )
+summary(testMod)
+# oid50
+-unname(coef(testMod)[1])/unname(coef(testMod)[2])
+
+# calculates oid50, same as above
+# library(MASS)
+# dose.p(testMod)
+
+## binomial regression
+test <- subset(zikv_cpv_wide, Virus == 'ZIKV_Cambodia_2010' & Population == 'Guadeloupe')
+testMod <- glm(Infected|Trials ~ log(Titer), family = binomial(link = 'logit'), data = test )
+summary(testMod)
+# oid50
+-unname(coef(testMod)[1])/unname(coef(testMod)[2])
+
+predY <- predict(testMod, newdata = test)
