@@ -5,8 +5,9 @@ data {
  vector[omega_ancestry_N] omega_ancestry;       // vector of prob. biting human | ancestry
  vector[omega_ancestry_N] aa_ancestry;          // vector of proportion aa ancestry
  
- int ancestry_N_new;                            // number of new observations to predict on
- vector[ancestry_N_new] aa_ancestry_new;        // vector of proportion aa ancestry 
+ // new ancestry data for predictions
+ int ancestry_N_new;                            // number of new ancestry values
+ vector[ancestry_N_new] aa_ancestry_new;        // vector of proportion aa ancestry
 }
 
 parameters {

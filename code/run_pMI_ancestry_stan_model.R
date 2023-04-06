@@ -52,15 +52,13 @@ df_new <- df_new %>% arrange(anc, Dose, Virus)
 
 data_list <- list(
   pMI_ancestry_N = nrow(df),
-  Trials = df$Trials,
-  Infected = df$Infected,
-  # anc = df$anc,
-  # logdose = log(df$Dose),
-  X = model.matrix(~ 0 + scale(anc) + log(Dose), data = df),
-  Virus = ifelse(df$Virus == 'ZIKV_Senegal_2011', 1, 0),
+  pMI_ancestry_Trials = df$Trials,
+  pMI_ancestry_Infected = df$Infected,
+  pMI_ancestry_X = model.matrix(~ 0 + scale(anc) + log(Dose), data = df),
+  pMI_ancestry_Virus = ifelse(df$Virus == 'ZIKV_Senegal_2011', 1, 0),
   pMI_ancestry_N_new = nrow(df_new),
-  X_new = model.matrix(~0 + scale(anc) + log(Dose), data = df_new),
-  Virus_new = df_new$Virus
+  pMI_ancestry_X_new = model.matrix(~0 + scale(anc) + log(Dose), data = df_new),
+  pMI_ancestry_Virus_new = df_new$Virus
 )
 
 # fit the model
@@ -76,7 +74,7 @@ stan_model_fit_ancestry_pMI
 pairs(stan_model_fit_ancestry_pMI)
 
 pdf('figures/pMI_ancestry_stan_traceplots.pdf', width = 8, height = 6)
-rstan::traceplot(stan_model_fit_ancestry_pMI, par = c('lp__', 'pMI_ancestry_b0', 'beta_ancestry[1]', 'beta_ancestry[2]', 'gamma_ancestry'), ncol = 2)
+rstan::traceplot(stan_model_fit_ancestry_pMI, par = c('lp__', 'pMI_ancestry_b0', 'pMI_ancestry_beta[1]', 'pMI_ancestry_beta[2]', 'pMI_ancestry_gamma'), ncol = 2)
 dev.off()
 
 # PPC plots

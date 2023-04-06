@@ -1,90 +1,22 @@
 # load libraries
 library(rstan)
-library(shinystan)
-library(boot)
-library(matrixStats)
-library(tidyverse)
 
-# load data
-traits.df <- read.csv('../VBD-Data/aegypti_traits_temp_formatted.csv')
-
-# for each trait, order by temperature from low to high 
-traits.df <- traits.df %>% arrange(trait_name_new, Temperature)
-
-# Dengue
-# format data
-model_data_denv <-
-  list(
-    alpha_climate_N = sum(traits.df$trait_name_new == 'alpha'),                         # number of observations
-    alpha_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'alpha'],    # vector of temperatures
-    alpha_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'alpha'],     # vector of trait values
-    b_climate_N = sum(traits.df$trait_name_new == 'b_denv'),                            # number of observations
-    b_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'b_denv'],       # vector of temperatures
-    b_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'b_denv'],        # vector of trait values
-    pMI_climate_N = sum(traits.df$trait_name_new == 'pMI_denv'),                        # number of observations
-    pMI_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'pMI_denv'],   # vector of temperatures
-    pMI_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'pMI_denv'],    # vector of trait values
-    EIR_climate_N = sum(traits.df$trait_name_new == 'EIR'),                             # number of observations
-    EIR_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'EIR'],        # vector of temperatures
-    EIR_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'EIR'],         # vector of trait values
-    lf_climate_N = sum(traits.df$trait_name_new == 'lifespan'),                         # number of observations
-    lf_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'lifespan'],    # vector of temperatures
-    lf_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'lifespan'],     # vector of trait values
-    climate_temp_new = seq(10,40,0.1),                                                  # vector of temperatures to predict on
-    climate_N_new = length(seq(10,40,0.1))                                              # number of new temperatures
-  )
-
-# save data
-saveRDS(model_data_denv, '../VBD-Data/aa_traits_denv.RData')
+# load data (source = 'format_data_for_R0_stan_model.R)
+load('../VBD-data/model_data_zikv.RData')
 
 # fit model
-stan_model_fit_denv <- sampling(
-  stan_model('code/R0_model.stan')
-  , data = model_data_denv
-  , iter = 10000
-)
-
-# save and open stanfit object
-saveRDS(stan_model_fit_denv,'../models/stan_model_fit_denv.rds')
-stan_model_fit_denv <- readRDS('../models/stan_model_fit_denv.rds')
-
-# Zika Model isn't fitting
-# If we need separate Zika and dengue models, suggest making sd of priors tighter (maybe 10 instead of 20)
-# format data
-# try fitting one zika variable at a time, b and pMI seem to have different issues
-model_data_zikv <-
-  list(
-    alpha_climate_N = sum(traits.df$trait_name_new == 'alpha'),                         # number of observations
-    alpha_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'alpha'],    # vector of temperatures
-    alpha_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'alpha'],     # vector of trait values
-    b_climate_N = sum(traits.df$trait_name_new == 'b_zikv'),                            # number of observations
-    b_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'b_zikv'],       # vector of temperatures
-    b_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'b_zikv'],        # vector of trait values
-    pMI_climate_N = sum(traits.df$trait_name_new == 'pMI_zikv'),                        # number of observations
-    pMI_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'pMI_zikv'],   # vector of temperatures
-    pMI_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'pMI_zikv'],    # vector of trait values
-    EIR_climate_N = sum(traits.df$trait_name_new == 'EIR'),                             # number of observations
-    EIR_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'EIR'],        # vector of temperatures
-    EIR_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'EIR'],         # vector of trait values
-    lf_climate_N = sum(traits.df$trait_name_new == 'lifespan'),                         # number of observations
-    lf_climate_temp = traits.df$Temperature[traits.df$trait_name_new == 'lifespan'],    # vector of temperatures
-    lf_climate = traits.df$trait_value_new[traits.df$trait_name_new == 'lifespan'],     # vector of trait values
-    climate_temp_new = seq(10,40,0.1),                                                  # vector of temperatures to predict on
-    climate_N_new = length(seq(10,40,0.1))                                              # number of new temperatures
-  )
-
-# fit model
-stan_model_fit_zikv <- sampling(
-  # stan_model('code/zikv_stan_test_model.stan')
-  stan_model('code/R0_model.stan')
+stan_model_fit_zikv <- 
+  sampling(
+    stan_model('code/R0_model.stan')
   , data = model_data_zikv
   , iter = 8000
-)
+  )
 
+# summary
+stan_model_fit_zikv
 
-# save and open stanfit object
+# save stanfit object
 saveRDS(stan_model_fit_zikv,'../models/stan_model_fit_zikv.rds')
-stan_model_fit_zikv <- readRDS('../models/stan_model_fit_zikv.rds')
 
 plotSamples(mod = stan_model_fit_zikv, param_name = 'pMI', df = model_data_zikv)
 plotSamples(mod = stan_model_fit_zikv, param_name = 'b', df = model_data_zikv)

@@ -8,21 +8,33 @@ library(ggplot2)
 library(cowplot)
 
 # list parameters
-params <- c('alpha_climate_Tmin'
+# ignores sigmas, deltas, etc.
+params <- c('omega_ancestry_constant'
+            , 'omega_ancestry_d'
+            , 'omega_ancestry_e'
+            , 'alpha_climate_Tmin'
             , 'alpha_climate_Tmax'
             , 'alpha_climate_constant'
             , 'b_climate_Tmin'
             , 'b_climate_Tmax'
             , 'b_climate_constant'
-            , 'pMI_climate_Tmin'
-            , 'pMI_climate_Tmax'
-            , 'pMI_climate_constant'
+            # , 'pMI_climate_Tmin'
+            # , 'pMI_climate_Tmax'
+            # , 'pMI_climate_constant'
+            , 'pMI_climate_rmax'
+            , 'pMI_climate_Topt'
+            , 'pMI_climate_a'
+            , 'pMI_ancestry_b0'
+            , 'pMI_ancestry_beta[1]'
+            , 'pMI_ancestry_beta[2]'
+            , 'pMI_ancestry_gamma'
             , 'EIR_climate_Tmin'
             , 'EIR_climate_Tmax'
             , 'EIR_climate_constant'
             , 'lf_climate_Tmin'
             , 'lf_climate_Tmax'
-            , 'lf_climate_constant')
+            , 'lf_climate_constant' 
+            )
 
 # list prior data
 prior_data <- c('alpha_climate'
@@ -32,20 +44,16 @@ prior_data <- c('alpha_climate'
                 , 'lf_climate')
 
 # open model
-r0_mod <- readRDS('../models/stan_model_fit_denv.rds')
+r0_mod <- readRDS('../models/stan_model_fit_zikv.rds')
+load('../VBD-data/model_data_zikv.RData')
 br_mod <- readRDS('../models/stan_model_fit_ancestry_alpha.rds')
 
 # assess model fit
 launch_shinystan(r0_mod)
 
 # trace plots ------------------------------------------------------
-pdf('figures/R0_stan_traceplots.pdf', width = 11, height = 8.5)
-rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 4)
-dev.off()
-
-pdf('figures/bite_rate_ancestry_stan_traceplots.pdf', width = 11, height = 8.5)
-mod_params2 <- c('alpha_ancestry_constant', 'alpha_ancestry_d', 'alpha_ancestry_e', 'alpha_ancestry_sigma')
-rstan::traceplot(br_mod, par = c('lp__', mod_params2), ncol = 2)
+pdf('figures/R0_stan_zikv_traceplots.pdf', width = 11, height = 8.5)
+rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 5)
 dev.off()
 
 # ppc plots --------------------------------------------------------
@@ -58,10 +66,11 @@ ppc_estimates <- lapply(ppc_estimates, quantile, probs=c(0.025,0.50,0.975), na.r
 ppc_estimates_quants <- do.call(rbind.data.frame, ppc_estimates)
 colnames(ppc_estimates_quants) <- c('lower', 'median', 'upper')
 ppc_estimates_quants$trait <- names(ppc_estimates)
-ppc_estimates_quants$trait <- gsub('_climate.*', '', ppc_estimates_quants$trait)
+# ppc_estimates_quants$trait <- gsub('_climate.*|_ppc.*|pMI_ancestry_', '', ppc_estimates_quants$trait)
+ppc_estimates_quants$trait <- gsub('_ppc.*', '', ppc_estimates_quants$trait)
 
 # load data
-mod_data <- readRDS('../VBD-Data/aa_traits_denv.RData')
+# mod_data <- readRDS('../VBD-Data/aa_traits_denv.RData')
 
 prior_data_df <- mod_data[prior_data]
 prior_data_df <- map_df(prior_data_df, ~as.data.frame(.x), .id='trait2')
@@ -106,7 +115,7 @@ plotSamples <- function(mod, param_name, df){
   }
 }
 
-pdf('figures/R0_trait_fit_plots.pdf', width = 11, height = 8.5)
+pdf('figures/R0_Zika_trait_fit_plots.pdf', width = 11, height = 8.5)
 par(mfrow = c(2, 3)) 
 plotSamples(mod = r0_mod, param_name = 'alpha', df = mod_data)
 plotSamples(mod = r0_mod, param_name = 'b', df = mod_data)
