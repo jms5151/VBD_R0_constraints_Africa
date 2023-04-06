@@ -1,4 +1,5 @@
 # Use rTPC package to compare compare multiple metabolic curves for Zika pMI 
+# tutorial: https://padpadpadpad.github.io/rTPC/articles/fit_many_models.html
 
 # load packages
 library(rTPC)

@@ -41,7 +41,7 @@ saveRDS(model_data_denv, '../VBD-Data/aa_traits_denv.RData')
 stan_model_fit_denv <- sampling(
   stan_model('code/R0_model.stan')
   , data = model_data_denv
-  , iter = 8000
+  , iter = 10000
 )
 
 # save and open stanfit object
@@ -78,13 +78,14 @@ stan_model_fit_zikv <- sampling(
   # stan_model('code/zikv_stan_test_model.stan')
   stan_model('code/R0_model.stan')
   , data = model_data_zikv
-  , iter = 3000
+  , iter = 8000
 )
 
-# 
-# # save and open stanfit object
-# saveRDS(stan_model_fit_zikv,'../models/stan_model_fit_zikv.rds')
-# stan_model_fit_zikv <- readRDS('../models/stan_model_fit_zikv.rds')
+
+# save and open stanfit object
+saveRDS(stan_model_fit_zikv,'../models/stan_model_fit_zikv.rds')
+stan_model_fit_zikv <- readRDS('../models/stan_model_fit_zikv.rds')
+
 plotSamples(mod = stan_model_fit_zikv, param_name = 'pMI', df = model_data_zikv)
 plotSamples(mod = stan_model_fit_zikv, param_name = 'b', df = model_data_zikv)
 
@@ -103,11 +104,11 @@ plotSamples(mod = stan_model_fit_zikv, param_name = 'b', df = model_data_zikv)
 # try https://padpadpadpad.github.io/rTPC/articles/rTPC.html
 
 # plots
-rstan::traceplot(stan_model_fit_denv, par = c('lp__', 'alpha_climate_Tmin','alpha_climate_Tmax','alpha_climate_constant'), ncol = 2)
-rstan::traceplot(stan_model_fit_denv, par = c('lp__', 'b_climate_Tmin','b_climate_Tmax','b_climate_constant'), ncol = 2)
-rstan::traceplot(stan_model_fit_denv, par = c('lp__', 'pMI_climate_Tmin','pMI_climate_Tmax','pMI_climate_constant'), ncol = 2)
-rstan::traceplot(stan_model_fit_denv, par = c('lp__', 'EIR_climate_Tmin','EIR_climate_Tmax','EIR_climate_constant'), ncol = 2)
-rstan::traceplot(stan_model_fit_denv, par = c('lp__', 'lf_climate_Tmin','lf_climate_Tmax','lf_climate_constant'), ncol = 2)
+rstan::traceplot(stan_model_fit_zikv, par = c('lp__', 'alpha_climate_Tmin','alpha_climate_Tmax','alpha_climate_constant'), ncol = 2)
+rstan::traceplot(stan_model_fit_zikv, par = c('lp__', 'b_climate_Tmin','b_climate_Tmax','b_climate_constant'), ncol = 2)
+rstan::traceplot(stan_model_fit_zikv, par = c('lp__', 'pMI_climate_Tmin','pMI_climate_Tmax','pMI_climate_constant'), ncol = 2)
+rstan::traceplot(stan_model_fit_zikv, par = c('lp__', 'EIR_climate_Tmin','EIR_climate_Tmax','EIR_climate_constant'), ncol = 2)
+rstan::traceplot(stan_model_fit_zikv, par = c('lp__', 'lf_climate_Tmin','lf_climate_Tmax','lf_climate_constant'), ncol = 2)
 # bayesplot::mcmc_acf(as.matrix(stan_model_fit_denv), pars = c("b_climate_Tmin","b_climate_Tmax","b_climate_constant"))
 # bayesplot::mcmc_areas(as.matrix(stan_model_fit_denv), pars = c("b_climate_Tmin","b_climate_Tmax","b_climate_constant"), prob = 0.95)
 
@@ -135,15 +136,15 @@ plotSamples <- function(mod, param_name, df){
   }
 }
 
-plotSamples(mod = stan_model_fit_zikv, param_name = 'alpha', df = model_data_zikv)
-plotSamples(mod = stan_model_fit_zikv, param_name = 'b', df = model_data_zikv)
-plotSamples(mod = stan_model_fit_zikv, param_name = 'pMI', df = model_data_zikv)
-plotSamples(mod = stan_model_fit_zikv, param_name = 'EIR', df = model_data_zikv)
-plotSamples(mod = stan_model_fit_zikv, param_name = 'lf', df = model_data_zikv)
-plotSamples(mod = stan_model_fit_zikv, param_name = 'R0', df = model_data_zikv)
+plotSamples(mod = stan_model_fit_denv, param_name = 'alpha', df = model_data_denv)
+plotSamples(mod = stan_model_fit_denv, param_name = 'b', df = model_data_denv)
+plotSamples(mod = stan_model_fit_denv, param_name = 'pMI', df = model_data_denv)
+plotSamples(mod = stan_model_fit_denv, param_name = 'EIR', df = model_data_denv)
+plotSamples(mod = stan_model_fit_denv, param_name = 'lf', df = model_data_denv)
+plotSamples(mod = stan_model_fit_denv, param_name = 'R0', df = model_data_denv)
 
 # parameter outputs, compare with Mordecai PLoS NTD
-list_of_draws <- rstan::extract(stan_model_fit_zikv)
+list_of_draws <- rstan::extract(stan_model_fit_denv)
 
 # temperature at which R0 is optimized
 r0Samples <- data.frame(list_of_draws['R0'])

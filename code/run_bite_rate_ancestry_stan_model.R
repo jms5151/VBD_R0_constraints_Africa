@@ -3,6 +3,17 @@ library(rstan)
 library(matrixStats)
 library(tidyverse)
 
+# generic traits, currently data generated from chatGPT
+alpha_vals <- c(2.4, 1.7, 2.5, 1.6, 1.6, 1.7, 2.8, 2.7, 3.4, 1.9, 1.6) # skipping extreme value from BG traps (all others are HLC) 
+b_vals <- c(0.80, 0.23, 0.10, 0.50, 0.33, 0.13, 0.52, 0.28, 0.23, 0.51)
+EIR_vals <- c(8.7, 9.2, 11.7, 7.8, 8.8, 10, 9.3, 7.5, 8.8, 7.9)
+lf_vals <- c(19.2, 17.8, 16.4, 12.1, 16.4, 17.2)
+pMI_vals <- c(0.89, 0.60, 0.40, 0.82, 0.75, 0.46, 0.77, 0.55, 0.60, 0.86)
+
+traits_prior <- list(alpha_vals, b_vals, EIR_vals, lf_vals, pMI_vals)
+lapply(traits_prior, mean)
+lapply(traits_prior, sd)
+
 # load data
 br_data <- read.csv('../VBD-data/combined_meta_allpops.csv')
 br_data <- subset(br_data, !is.na(prop_aaa_ancestry))
@@ -38,7 +49,11 @@ dev.off()
 # plot model
 plotSamples <- function(mod, param_name, df){
   list_of_draws <- rstan::extract(mod)
-  param_name_new <- paste0(param_name, '_ancestry_new')
+  if(param_name != 'R0_ancestry'){
+    param_name_new <- paste0(param_name, '_ancestry_new')
+  } else {
+    param_name_new <- param_name
+  }
 
   samps <- data.frame(list_of_draws[param_name_new])
   sampMeans <- colMeans(samps, na.rm = T)
@@ -50,11 +65,17 @@ plotSamples <- function(mod, param_name, df){
   plot(df[['aa_ancestry_new']], sampMeans, type='l', lwd=2, ylab=param_name, xlab='Proportion aa ancestry', ylim = c(0,yMax), xlim = c(0,1))
   lines(df[['aa_ancestry_new']], sampQuantiles[,1], lty=2, col='red', ylim=c(0,yMax))
   lines(df[['aa_ancestry_new']], sampQuantiles[,2], lty=2, col='red', ylim=c(0,yMax))
-  points(df[['aa_ancestry']], df[['omega_ancestry']], pch = 16)
+  if(param_name != 'R0_ancestry'){
+    points(df[['aa_ancestry']], df[['omega_ancestry']], pch = 16)
+  }
 }
 
 pdf('figures/bite_rate_given_ancestry_fit.pdf', width = 11, height = 8.5)
 plotSamples(mod = stan_model_fit_ancestry_omega, param_name = 'omega', df = model_data)
+dev.off()
+
+pdf('figures/bite_rate_given_ancestry_R0.pdf', width = 11, height = 8.5)
+plotSamples(mod = stan_model_fit_ancestry_omega, param_name = 'R0_ancestry', df = model_data)
 dev.off()
 
 # paramter values

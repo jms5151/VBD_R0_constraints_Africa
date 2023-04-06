@@ -42,7 +42,7 @@ parameters {
   real<lower=24, upper=45> b_climate_Tmax;          // parameter Tmax
   real<lower=0> b_climate_sigma;                    // noise
 
-  // // pMI (prob mosquito infection)
+  // // pMI denv (prob mosquito infection)
   // real<lower=0, upper=0.01> pMI_climate_constant;   // parameter c
   // real<lower=0, upper=24> pMI_climate_Tmin;         // parameter Tmin
   // real<lower=24, upper=45> pMI_climate_Tmax;        // parameter Tmax
@@ -100,7 +100,7 @@ model {                                             // Fit models to observed da
     target += positive_infinity();
   }
 
-  // // pMI (prob mosquito infection)
+  // // pMI denv (prob mosquito infection)
   // pMI_climate_constant ~ normal(4.91E-04,0.01);     // prior for c
   // pMI_climate_Tmin ~ normal(12.22,20);              // prior for Tmin
   // pMI_climate_Tmax ~ normal(37.46,20);              // prior for Tmax
@@ -167,6 +167,7 @@ generated quantities {
 
   // new vectors for parameters
   vector[climate_N_new] NmNh;                       // ratio of mosquitoes to humans
+  vector[climate_N_new] delta;                      // intrinsic incubation period
   vector[climate_N_new] mu_h;                       // human mortality rate
   vector[climate_N_new] gamma;                      // Human infectivity period 
   
@@ -189,8 +190,8 @@ generated quantities {
     b_climate_ppc[q] = normal_rng(b_climate_mu_ppc, b_climate_sigma);
   }
 
-  // // ppc pMI (prob mosquito infection)
-  // for (r in 1:pMI_climate_N){                       
+  // // ppc pMI denv (prob mosquito infection)
+  // for (r in 1:pMI_climate_N){
   //   real pMI_climate_mu_ppc = pMI_climate_constant * pMI_climate_temp[r] * (pMI_climate_temp[r] - pMI_climate_Tmin) * sqrt(pMI_climate_Tmax - pMI_climate_temp[r]);
   //   pMI_climate_ppc[r] = normal_rng(pMI_climate_mu_ppc, pMI_climate_sigma);
   // }
@@ -232,10 +233,10 @@ generated quantities {
       b_climate_new[xx] = 0;
     }
 
-    // // pMI (prob mosquito infection)
+    // // pMI denv (prob mosquito infection)
     // if(pMI_climate_Tmin < climate_temp_new[xx] && pMI_climate_Tmax > climate_temp_new[xx]){
     //   pMI_climate_new[xx] = normal_rng((pMI_climate_constant * climate_temp_new[xx] * (climate_temp_new[xx] - pMI_climate_Tmin) * sqrt(pMI_climate_Tmax - climate_temp_new[xx])), pMI_climate_sigma);
-    // } 
+    // }
     // else {
     //   pMI_climate_new[xx] = 0;
     // }
@@ -262,11 +263,13 @@ generated quantities {
     
     NmNh[xx] = normal_rng(2,0.5);
     mu_h[xx] = normal_rng(4.25E-05, 0.00005);
-    gamma[xx] = normal_rng(0.2, 0.06);
+    // delta[xx] = 1/weibull_rng(2.69, 6.70);           //zikv from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5403043/#SD1
+    delta[xx] = 1/gamma_rng(5.9, 0.5);                  //zikv from https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0004726              
+    gamma[xx] = 1/gamma_rng(5.0, 0.5);
 
     R0[xx] = sqrt((alpha_climate_new[xx] * b_climate_new[xx] *
     (EIR_climate_new[xx] / ((1/lf_climate_new[xx]) * ((1/lf_climate_new[xx]) + EIR_climate_new[xx])))) *
-    (alpha_climate_new[xx] * pMI_climate_new[xx] * NmNh[xx] * (gamma[xx] / ((gamma[xx] + mu_h[xx]) *
+    (alpha_climate_new[xx] * pMI_climate_new[xx] * NmNh[xx] * (delta[xx] / ((delta[xx] + mu_h[xx]) *
     (gamma[xx] + mu_h[xx])))));
   }
 }
