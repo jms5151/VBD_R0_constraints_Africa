@@ -112,6 +112,7 @@ model_data_zikv <-
     , surveys_X = model.matrix(~0 + scale(prop_aaa_ancestry) + log(Dose), data = survey_new)
     , surveys_Virus = survey_new$Virus
     , surveys_dose = survey_new$Dose # only needed for assessing output
+    , surveys_location = survey_new$Location # only needed for assessing output
   )
 
 save(model_data_zikv, file = '../VBD-data/model_data_zikv.RData')

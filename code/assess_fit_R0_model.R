@@ -5,36 +5,8 @@ library(boot)
 library(matrixStats)
 library(tidyverse)
 library(ggplot2)
+library(ggrepel)
 library(cowplot)
-
-# list parameters
-# ignores sigmas, deltas, etc.
-params <- c('omega_ancestry_constant'
-            , 'omega_ancestry_d'
-            , 'omega_ancestry_e'
-            , 'alpha_climate_Tmin'
-            , 'alpha_climate_Tmax'
-            , 'alpha_climate_constant'
-            , 'b_climate_Tmin'
-            , 'b_climate_Tmax'
-            , 'b_climate_constant'
-            # , 'pMI_climate_Tmin'
-            # , 'pMI_climate_Tmax'
-            # , 'pMI_climate_constant'
-            , 'pMI_climate_rmax'
-            , 'pMI_climate_Topt'
-            , 'pMI_climate_a'
-            , 'pMI_ancestry_b0'
-            , 'pMI_ancestry_beta[1]'
-            , 'pMI_ancestry_beta[2]'
-            , 'pMI_ancestry_gamma'
-            , 'EIR_climate_Tmin'
-            , 'EIR_climate_Tmax'
-            , 'EIR_climate_constant'
-            , 'lf_climate_Tmin'
-            , 'lf_climate_Tmax'
-            , 'lf_climate_constant' 
-            )
 
 # open model
 r0_mod <- readRDS('../models/stan_model_fit_zikv.rds')
@@ -45,8 +17,43 @@ mod_data <- model_data_zikv
 # launch_shinystan(r0_mod)
 
 # trace plots ------------------------------------------------------
+# list parameters
+# ignores deltas, etc.
+params <- c('omega_ancestry_constant'
+            , 'omega_ancestry_d'
+            , 'omega_ancestry_e'
+            , 'omega_ancestry_sigma'
+            , 'alpha_climate_Tmin'
+            , 'alpha_climate_Tmax'
+            , 'alpha_climate_constant'
+            , 'alpha_climate_sigma'
+            , 'b_climate_Tmin'
+            , 'b_climate_Tmax'
+            , 'b_climate_constant'
+            , 'b_climate_sigma'
+            # , 'pMI_climate_Tmin'
+            # , 'pMI_climate_Tmax'
+            # , 'pMI_climate_constant'
+            # , 'pMI_climate_sigma'
+            , 'pMI_climate_rmax'
+            , 'pMI_climate_Topt'
+            , 'pMI_climate_a'
+            , 'pMI_climate_sigma'
+            , 'pMI_ancestry_b0'
+            , 'pMI_ancestry_beta[1]'
+            , 'pMI_ancestry_beta[2]'
+            , 'pMI_ancestry_gamma'
+            , 'EIR_climate_Tmin'
+            , 'EIR_climate_Tmax'
+            , 'EIR_climate_constant'
+            , 'EIR_climate_sigma'
+            , 'lf_climate_Tmin'
+            , 'lf_climate_Tmax'
+            , 'lf_climate_constant' 
+            , 'lf_climate_sigma'
+)
 pdf('figures/R0_stan_zikv_traceplots.pdf', width = 11, height = 8.5)
-rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 5)
+rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 5, nrow = 6)
 dev.off()
 
 # ppc plots --------------------------------------------------------
@@ -116,7 +123,7 @@ plot_temperature_samples <- function(mod, param_name, df, plotPoints){
 }
 
 
-# plot temperature dependent traits and R0 model
+# plot temperature dependent traits and R0 model -------------------------------
 pdf('figures/R0_Zika_trait_fit_plots.pdf', width = 11, height = 8.5)
 par(mfrow = c(2, 3)) 
 plot_temperature_samples(mod = r0_mod, param_name = 'alpha', df = mod_data, plotPoints = T)
@@ -149,7 +156,7 @@ lines(aa_samps_long$aa, aa_samps_long$upper, lty=2, col='red')
 points(mod_data$omega_ancestry_aa, mod_data$omega_ancestry, pch = 16)
 dev.off()
 
-# pMI ancestry modeled across strains and doses
+# pMI ancestry modeled across strains and doses ---------------------------------
 pred_indexes <- names(r0_mod)[grep('pMI_ancestry_new', names(r0_mod))]
 pred_estimates <- rstan::extract(r0_mod, pred_indexes)
 pred_estimates <- lapply(pred_estimates, quantile, probs=c(0.025,0.50,0.975), na.rm=TRUE)
@@ -172,8 +179,13 @@ ggplot(pred_estimates_quants, aes(x = anc, y = median, color = as.factor(Dose), 
 ggsave('figures/pMI_ancestry_model.pdf')  
 
 
-plot_ancestry_R0 <- function(param_name){
+plot_ancestry_R0 <- function(param_name, extraThinning = F){
   pred_indexes <- names(r0_mod)[grep(param_name, names(r0_mod))]
+  
+  if(extraThinning == T){
+    pred_indexes <- pred_indexes[!grepl('omega|pMI|surveys', pred_indexes)]
+  }
+  
   pred_estimates <- rstan::extract(r0_mod, pred_indexes)
   pred_estimates <- lapply(pred_estimates, quantile, probs=c(0.025,0.50,0.975), na.rm=TRUE)
   pred_estimates_quants <- do.call(rbind.data.frame, pred_estimates)
@@ -194,6 +206,7 @@ plot_ancestry_R0 <- function(param_name){
     geom_line() +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
     facet_wrap(~Virus) +
+    # facet_wrap(~Virus+Dose) +
     theme_classic() +
     xlab('Proportion Ae. aegypti ancestry') +
     ylab(yLabel)
@@ -210,19 +223,30 @@ ggsave('figures/R0_ancestry_pMI.pdf')
 plot_ancestry_R0(param_name = 'R0_ancestry_omega')
 ggsave('figures/R0_ancestry_omega.pdf') 
 
-# need to rerun, R0 1-9 missing
-plot_ancestry_R0(param_name = 'R0_ancestry') # R0_ancestry\\[.\\d]
+plot_ancestry_R0(param_name = 'R0_ancestry', extraThinning = T) # R0_ancestry\\[.\\d]
 ggsave('figures/R0_ancestry.pdf') 
 
-# survey site R0 plots
+# altnerative save wrap by virus + dose
+ggsave('figures/R0_ancestry2.pdf') 
+
+# survey site R0 plots ---------------------------------------------------------
+pullSamples50 <- function(mod, param_name){
+  list_of_draws <- rstan::extract(mod)
+  samps <- data.frame(list_of_draws[param_name])
+  sampQuantiles <- colQuantiles(list_of_draws[[param_name]], na.rm = T, probs = c(0.25, 0.50, 0.75))
+  sampQuantiles <- ifelse(sampQuantiles < 0, 0, sampQuantiles)
+  return(sampQuantiles)
+}
+
 format_survey_samples <- function(paramName){
-  r0vals <- pullSamples(mod = r0_mod, param_name = paramName)
+  r0vals <- pullSamples50(mod = r0_mod, param_name = paramName)
   r0vals <- as.data.frame(r0vals)
   colnames(r0vals) <- c('lower', 'median', 'upper')
   colnames(r0vals) <- paste(paramName, colnames(r0vals), sep = '_')
   r0vals$anc <- mod_data$surveys_aa
   r0vals$Virus <- mod_data$surveys_Virus
   r0vals$Dose <- mod_data$surveys_dose
+  r0vals$site <- mod_data$surveys_location
   # r0vals$model <- paramName
   return(r0vals)
 }
@@ -237,96 +261,160 @@ ss <- ss_r0_climate %>%
 
 ss$Virus <- ifelse(ss$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
 
-ggplot(ss, aes(x = R0_climate_surveys_median, y = R0_ancestry_surveys_median)) +
-  geom_point() +
-  # geom_errorbarh(aes(xmax = R0_climate_surveys_upper, xmin = R0_climate_surveys_lower, height = .2)) +
-  # geom_errorbar(aes(ymax = R0_ancestry_surveys_upper, ymin = R0_ancestry_surveys_lower)) +
-  facet_wrap(~Virus + Dose) +
-  theme_bw() +
-  ylim(0,4) +
-  xlim(0,4) +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1)
-
-ggplot(ss, aes(x = R0_full_surveys_median, y = R0_climate_surveys_median)) +
-  geom_point() +
-  facet_wrap(~Virus + Dose) +
-  theme_bw() +
-  ylim(0,4) +
-  xlim(0,4) +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1)
+gridPlotDoseVirus <- function(df, xval, yval){
+  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
+    geom_point() +
+    facet_wrap(~Virus + Dose) +
+    theme_bw() +
+    ylim(0,4) +
+    xlim(0,4) +
+    geom_hline(yintercept = 1) +
+    geom_vline(xintercept = 1) +
+    xlab(xval) +
+    ylab(yval) 
+}
 
 
-ggplot(ss, aes(x = R0_full_surveys_median, y = R0_ancestry_surveys_median)) +
-  geom_point() +
-  facet_wrap(~Virus + Dose) +
-  theme_bw() +
-  ylim(0,4) +
-  xlim(0,4) +
-  geom_hline(yintercept = 1) +
-  geom_vline(xintercept = 1)
+gridPlotDoseVirus(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
+ggsave('figures/R0_surveys_climate_vs_ancestry.pdf', height = 8.5, width = 11) 
 
+gridPlotDoseVirus(df = ss, xval = 'R0_full_surveys_median', yval = 'R0_climate_surveys_median')
+ggsave('figures/R0_surveys_full_vs_climate.pdf', height = 8.5, width = 11) 
+
+gridPlotDoseVirus(df = ss, xval = 'R0_full_surveys_median', yval = 'R0_ancestry_surveys_median')
+ggsave('figures/R0_surveys_full_vs_ancestry.pdf', height = 8.5, width = 11) 
+
+plotWithUncertainty <- function(df, xval, yval){
+  xupper <- gsub('_median', '_upper', xval)
+  xlower <- gsub('_median', '_lower', xval)
+  yupper <- gsub('_median', '_upper', yval)
+  ylower <- gsub('_median', '_lower', yval)
+  df$site <- ifelse(df[,xval] > 1 & df[,yval] > 1, df$site, '')
+
+  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
+    geom_errorbarh(aes_string(xmax = df[,xupper], xmin = df[,xlower]), col = 'darkgrey') +
+    geom_errorbar(aes_string(ymax = df[,yupper], ymin = df[,ylower]), col = 'darkgrey') +
+    geom_point(size = 2, color = 'black') +
+    theme_bw() +
+    ylim(0,6) +
+    xlim(0,6) +
+    geom_hline(yintercept = 1) +
+    geom_vline(xintercept = 1) +
+    xlab(gsub('_|surveys|median', ' ', xval)) +
+    ylab(gsub('_|surveys|median', ' ', yval)) +
+    geom_text_repel(aes(label = site))
+}
+
+# highlight since dose and site
+cambodia_low_dose <- subset(ss, Virus == 'ZIKV_Cambodia_2010' & Dose == 1275000)
+
+plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
+ggsave('figures/R0_surveys_climate_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+
+plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_climate_surveys_median')
+ggsave('figures/R0_surveys_full_vs_climate_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+
+plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_ancestry_surveys_median')
+ggsave('figures/R0_surveys_full_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
 
 # prior vs posterior plots -----------------------------------
 
 # function to overlay histogram and normal density
-overlay_distributions_plot <- function(mod, param_name, priorMean, priorSD){
+overlay_distributions_plot <- function(mod, param_name, type, priorValue1, priorValue2){
   # get posterior distribution
   df <- as.data.frame(rstan::extract(mod, param_name))
   # plot
-  ggplot(df, aes_string(param_name)) +
+  p <- ggplot(df, aes_string(param_name)) +
     geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'yellow', alpha = 0.4) +
-    stat_function(
-      fun = dnorm, 
-      args = list(mean = priorMean, sd = priorSD), 
-      lwd = 2, 
-      col = 'black'
-    ) +
     theme_classic() +
     ggtitle(param_name) +
     ylab('') +
     xlab('')
+  
+  if(type == 'normal'){
+    p  + 
+      stat_function(
+        fun = dnorm, 
+        args = list(mean = priorValue1, sd = priorValue2), 
+        lwd = 2, 
+        col = 'black'
+      )
+  } else if(type == 'uniform'){
+    p  + 
+      stat_function(
+        fun = dunif, 
+        args = list(min = priorValue1, max = priorValue2), 
+        lwd = 2, 
+        col = 'black'
+      )
+  }
 }
 
+# overlay_distributions_plot <- function(mod, param_name, priorMean, priorSD){
+#   # get posterior distribution
+#   df <- as.data.frame(rstan::extract(mod, param_name))
+#   # plot
+#   ggplot(df, aes_string(param_name)) +
+#     geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'yellow', alpha = 0.4) +
+#     stat_function(
+#       fun = dunif, 
+#       args = list(min = priorMin, max = priorMax), 
+#       lwd = 2, 
+#       col = 'black'
+#     ) +
+#     theme_classic() +
+#     ggtitle(param_name) +
+#     ylab('') +
+#     xlab('')
+# }
 
-a_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_constant', priorMean = 2.02E-04, priorSD = 0.01)
-a_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmin', priorMean =  13.35, priorSD = 20)
-a_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmax', priorMean = 40.08, priorSD = 20)
-b_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_constant', priorMean = 8.49E-04, priorSD = 0.01)
-b_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmin', priorMean = 17.05, priorSD = 20)
-b_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmax', priorMean = 35.83, priorSD = 20)
-# pMI_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_constant', priorMean = 4.91E-04, priorSD = 0.01)
-# pMI_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Tmin', priorMean = 12.22, priorSD = 20)
-# pMI_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Tmax', priorMean = 37.46, priorSD = 20)
-pMI_clim_rmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_rmax', priorMean = 0.24, priorSD = 0.03)
-pMI_clim_Topt <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Topt', priorMean = 30.08, priorSD = 0.38)
-pMI_clim_a <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_a', priorMean = 3.60, priorSD = 0.41)
-EIR_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_constant', priorMean = 6.65E-05, priorSD = 0.01)
-EIR_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmin', priorMean = 10.68, priorSD = 20)
-EIR_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmax', priorMean = 45.90, priorSD = 20)
-lf_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_constant', priorMean = -1.48E-01, priorSD = 0.1)
-lf_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmin', priorMean = 9.16, priorSD = 20)
-lf_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmax', priorMean = 37.73, priorSD = 20)
+a_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_constant', type = 'normal', priorValue1 = 2.02E-04, priorValue2 = 0.01)
+a_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmin', type = 'normal', priorValue1 =  13.35, priorValue2 = 20)
+a_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmax', type = 'normal', priorValue1 = 40.08, priorValue2 = 20)
+a_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
+b_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_constant', type = 'normal', priorValue1 = 8.49E-04, priorValue2 = 0.01)
+b_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmin', type = 'normal', priorValue1 = 17.05, priorValue2 = 20)
+b_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmax', type = 'normal', priorValue1 = 35.83, priorValue2 = 20)
+b_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
+# pMI_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_constant', type = 'normal', priorValue1 = 4.91E-04, priorValue2 = 0.01)
+# pMI_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Tmin', type = 'normal', priorValue1 = 12.22, priorValue2 = 20)
+# pMI_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Tmax', type = 'normal', priorValue1 = 37.46, priorValue2 = 20)
+pMI_clim_rmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_rmax', type = 'normal', priorValue1 = 0.24, priorValue2 = 0.03)
+pMI_clim_Topt <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Topt', type = 'normal', priorValue1 = 30.08, priorValue2 = 0.38)
+pMI_clim_a <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_a', type = 'normal', priorValue1 = 3.60, priorValue2 = 0.41)
+pMI_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
+EIR_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_constant', type = 'normal', priorValue1 = 6.65E-05, priorValue2 = 0.01)
+EIR_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmin', type = 'normal', priorValue1 = 10.68, priorValue2 = 20)
+EIR_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmax', type = 'normal', priorValue1 = 45.90, priorValue2 = 20)
+EIR_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
+lf_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_constant', type = 'normal', priorValue1 = -1.48E-01, priorValue2 = 0.1)
+lf_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmin', type = 'normal', priorValue1 = 9.16, priorValue2 = 20)
+lf_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmax', type = 'normal', priorValue1 = 37.73, priorValue2 = 20)
+lf_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
 
 p <- plot_grid(a_clim_const
           , a_clim_Tmin
           , a_clim_Tmax
+          , a_clim_sig
           , b_clim_const
           , b_clim_Tmin
           , b_clim_Tmax
+          , b_clim_sig
           # , pMI_clim_const
           # , pMI_clim_Tmin
           # , pMI_clim_Tmax
           , pMI_clim_rmax
           , pMI_clim_Topt
           , pMI_clim_a
+          , pMI_clim_sig
           , EIR_clim_const
           , EIR_clim_Tmin
           , EIR_clim_Tmax
+          , EIR_clim_sig
           , lf_clim_const
           , lf_clim_Tmin
           , lf_clim_Tmax
+          , lf_clim_sig
           )
 ggsave('figures/prior_vs_posterior_plots.pdf', p, width = 11, height = 11)
 
