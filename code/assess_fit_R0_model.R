@@ -274,7 +274,6 @@ gridPlotDoseVirus <- function(df, xval, yval){
     ylab(yval) 
 }
 
-
 gridPlotDoseVirus(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
 ggsave('figures/R0_surveys_climate_vs_ancestry.pdf', height = 8.5, width = 11) 
 
@@ -296,10 +295,11 @@ plotWithUncertainty <- function(df, xval, yval){
     geom_errorbar(aes_string(ymax = df[,yupper], ymin = df[,ylower]), col = 'darkgrey') +
     geom_point(size = 2, color = 'black') +
     theme_bw() +
+    theme(text = element_text(size = 14)) +
     ylim(0,6) +
     xlim(0,6) +
-    geom_hline(yintercept = 1) +
-    geom_vline(xintercept = 1) +
+    geom_hline(yintercept = 1,linetype=2) +
+    geom_vline(xintercept = 1,linetype=2) +
     xlab(gsub('_|surveys|median', ' ', xval)) +
     ylab(gsub('_|surveys|median', ' ', yval)) +
     geom_text_repel(aes(label = site))
@@ -308,14 +308,23 @@ plotWithUncertainty <- function(df, xval, yval){
 # highlight since dose and site
 cambodia_low_dose <- subset(ss, Virus == 'ZIKV_Cambodia_2010' & Dose == 1275000)
 
-plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
-ggsave('figures/R0_surveys_climate_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+cam1 <- plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
+# ggsave('figures/R0_surveys_climate_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
 
-plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_climate_surveys_median')
-ggsave('figures/R0_surveys_full_vs_climate_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+cam2 <- plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_climate_surveys_median')
+# ggsave('figures/R0_surveys_full_vs_climate_cambodia_low_dose.pdf', height = 8.5, width = 11) 
 
-plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_ancestry_surveys_median')
-ggsave('figures/R0_surveys_full_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+cam3 <- plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_ancestry_surveys_median')
+# ggsave('figures/R0_surveys_full_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+
+cam <- plot_grid(cam1, cam2, cam3, nrow = 1)
+ggsave('figures/R0_scatterplot_cambodia_low_dose.pdf.pdf', cam, width = 12, height = 4)
+
+# summary
+cambodia_low_dose_summary <- cambodia_low_dose %>%
+  summarise(climate_N = sum(R0_climate_surveys_median > 1)
+            , ancestry_N = sum(R0_ancestry_surveys_median > 1)
+            , full_N = sum(R0_full_surveys_median > 1))
 
 # prior vs posterior plots -----------------------------------
 
