@@ -51,8 +51,15 @@ data {
   int surveys_N;                                                // number of survey sites
   matrix[surveys_N, 2] surveys_X;                               // survey covariates
   int<lower=0, upper=1> surveys_Virus[surveys_N];               // virus
-  vector[surveys_N] surveys_aa;
+  vector[surveys_N] surveys_aa;                                 // ancestry values
   vector[surveys_N] surveys_temp;                               // temperature values
+  
+  // map data
+  int map_N;                                                    // number of pixels
+  matrix[map_N, 2] map_X;                                       // survey covariates
+  int<lower=0, upper=1> map_Virus[map_N];                       // virus
+  vector[map_N] map_aa;                                         // ancestry values
+  vector[map_N] map_temp;                                       // temperature values
 
 }
 
@@ -268,6 +275,18 @@ generated quantities {
   vector[surveys_N] omega_surveys;
   vector[surveys_N] pMI_ancestry_surveys;
   
+  // parameters for models to predict across map locations 
+  vector[map_N] alpha_climate_map;                          // alpha (biting rate)
+  vector[map_N] b_climate_map;                              // b (prob mosquito infectiousness)
+  vector[map_N] pMI_ancestry_map;                           // pMI (prob mosquito infection)
+  vector[map_N] EIR_climate_map;                            // EIR (extrinsic incubation rate)
+  vector[map_N] lf_climate_map;                             // lifespan (1/mosquito mortality rate)
+  vector[map_N] NmNh_map;                                   // ratio of mosquitoes to humans
+  vector[map_N] delta_map;                                  // intrinsic incubation period
+  vector[map_N] mu_h_map;                                   // human mortality rate
+  vector[map_N] gamma_map;                                  // Human infectivity period
+  vector[map_N] omega_map;
+
   // R0 models to predict across gradients of temperature or ancestry
   vector[climate_N_new] R0_climate;                                 // R0 (climate)
   vector[ancestry_N_new] R0_ancestry_omega;                         // R0 (ancestry, omega only)
@@ -279,6 +298,8 @@ generated quantities {
   vector[surveys_N] R0_ancestry_surveys;                            // R0 (ancestry)
   vector[surveys_N] R0_full_surveys;                                // R0 (climate + ancestry)
   
+  // R0 models to predict across map locations
+  vector[map_N] R0_full_map;
   
   // posterior predictive
   // ppc omega (prob biting human)
@@ -504,6 +525,60 @@ generated quantities {
     (EIR_climate_surveys[zz] / ((1/lf_climate_surveys[zz]) * ((1/lf_climate_surveys[zz]) + EIR_climate_surveys[zz])))) *
     (alpha_climate_surveys[zz] * pMI_ancestry_surveys[zz] * NmNh_surveys[zz] * (delta_surveys[zz] / ((delta_surveys[zz] + mu_h_surveys[zz]) *
     (gamma_surveys[zz] + mu_h_surveys[zz])))));
+
+  }
+  
+  for(mm in 1:map_N){
+
+    // omega (prob biting | ancestry)
+    omega_map[mm] = normal_rng(omega_ancestry_constant + ((omega_ancestry_d - omega_ancestry_constant)/(1 + (omega_ancestry_e / map_aa[mm]))), omega_ancestry_sigma);
+
+    // alpha (biting rate)
+    if(alpha_climate_Tmin < map_temp[mm] && alpha_climate_Tmax > map_temp[mm]){
+      alpha_climate_map[mm] = normal_rng((alpha_climate_constant * map_temp[mm] * (map_temp[mm] - alpha_climate_Tmin) * sqrt(alpha_climate_Tmax - map_temp[mm])), alpha_climate_sigma);
+    }
+    else {
+      alpha_climate_map[mm] = 0;
+    }
+
+    // b (prob mosquito infectiousness)
+    if(b_climate_Tmin < map_temp[mm] && b_climate_Tmax > map_temp[mm]){
+      b_climate_map[mm] = normal_rng((b_climate_constant * map_temp[mm] * (map_temp[mm] - b_climate_Tmin) * sqrt(b_climate_Tmax - map_temp[mm])), b_climate_sigma);
+    }
+    else {
+      b_climate_map[mm] = 0;
+    }
+
+    // pMI ancestry (prob mosquito infection)
+    pMI_ancestry_map[mm] = inv_logit(pMI_ancestry_b0 + map_X[mm] * pMI_ancestry_beta + pMI_ancestry_gamma * map_Virus[mm]);
+
+    // EIR (extrinsic incubation rate)
+    if(EIR_climate_Tmin < map_temp[mm] && EIR_climate_Tmax > map_temp[mm]){
+      EIR_climate_map[mm] = normal_rng((EIR_climate_constant * map_temp[mm] * (map_temp[mm] - EIR_climate_Tmin) * sqrt(EIR_climate_Tmax - map_temp[mm])), EIR_climate_sigma);
+    }
+    else {
+      EIR_climate_map[mm] = 0;
+    }
+
+    // lifespan (1/mosquito mortality rate)
+    if(lf_climate_Tmin < map_temp[mm] && lf_climate_Tmax > map_temp[mm]){
+      lf_climate_map[mm] = normal_rng((lf_climate_constant * (map_temp[mm] - lf_climate_Tmax) * (map_temp[mm] - lf_climate_Tmin)), lf_climate_sigma);
+    }
+    else {
+      lf_climate_map[mm] = 0;
+    }
+
+    NmNh_map[mm] = normal_rng(2,0.5);
+    mu_h_map[mm] = normal_rng(4.25E-05, 0.00005);
+    // delta[mm] = 1/weibull_rng(2.69, 6.70);           //zikv from https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5403043/#SD1
+    delta_map[mm] = 1/gamma_rng(5.9, 0.5);                  //zikv from https://journals.plos.org/plosntds/article?id=10.1371/journal.pntd.0004726
+    gamma_map[mm] = 1/gamma_rng(5.0, 0.5);
+
+    // R0 climate + ancestry (pMI ancestry)
+    R0_full_map[mm] = sqrt((omega_map[mm] * alpha_climate_map[mm] * b_climate_map[mm] *
+    (EIR_climate_map[mm] / ((1/lf_climate_map[mm]) * ((1/lf_climate_map[mm]) + EIR_climate_map[mm])))) *
+    (alpha_climate_map[mm] * pMI_ancestry_map[mm] * NmNh_map[mm] * (delta_map[mm] / ((delta_map[mm] + mu_h_map[mm]) *
+    (gamma_map[mm] + mu_h_map[mm])))));
 
   }
 

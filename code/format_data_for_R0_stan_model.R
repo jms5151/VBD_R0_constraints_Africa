@@ -72,6 +72,11 @@ colnames(survey_new) <- c('Location', 'Dose', 'Virus')
 survey_new <- survey_new %>%
   left_join(survey_data[,c('Location', 'prop_aaa_ancestry', 'bio.bio8_temp_wetq')])
 
+# map data
+map_data <- read.csv('../VBD-data/map_variables.csv')
+map_data$Dose <- rep(min(zikv_new$Dose), nrow(map_data))
+map_data$Virus <- rep(0, nrow(map_data))
+
 # combine data for Zika model
 model_data_zikv <-
   list(
@@ -113,6 +118,13 @@ model_data_zikv <-
     , surveys_Virus = survey_new$Virus
     , surveys_dose = survey_new$Dose # only needed for assessing output
     , surveys_location = survey_new$Location # only needed for assessing output
+    , map_N = nrow(map_data)
+    , map_temp = map_data$wc2.1_10m_bio_8
+    , map_aa = map_data$prop_aaa_raster
+    , map_Virus = map_data$Virus
+    , map_X = model.matrix(~0 + scale(prop_aaa_raster) + log(Dose), data = map_data)
+    , map_lon = map_data$x # only needed for mapping output
+    , map_lat = map_data$y # only needed for mapping output
   )
 
 save(model_data_zikv, file = '../VBD-data/model_data_zikv.RData')
