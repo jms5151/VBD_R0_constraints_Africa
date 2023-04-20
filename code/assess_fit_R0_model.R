@@ -150,7 +150,7 @@ aa_samps_long <- aa_samps_long %>% left_join(aa_key) %>%
             )
 
 pdf('figures/Omega_fit.pdf', width = 11, height = 8.5)
-plot(aa_samps_long$aa, aa_samps_long$median, type = 'l', ylim= c(0,1), xlab = 'Proportion Ae. aegypti ancestry', ylab = 'Omega (prob biting humans | ancestry)')
+plot(aa_samps_long$aa, aa_samps_long$median, type = 'l', ylim= c(0,1), xlab = 'Proportion Ae. aegypti ancestry', ylab = 'Omega (prob biting humans | ancestry)', cex = 1.2)
 lines(aa_samps_long$aa, aa_samps_long$lower, lty=2, col='red')
 lines(aa_samps_long$aa, aa_samps_long$upper, lty=2, col='red')
 points(mod_data$omega_ancestry_aa, mod_data$omega_ancestry, pch = 16)
