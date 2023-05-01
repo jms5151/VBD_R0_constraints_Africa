@@ -92,174 +92,169 @@ dev.off()
 
 
 # trait fits --------------------------------------------------
-pullSamples <- function(mod, param_name){
-  list_of_draws <- rstan::extract(mod)
-  samps <- data.frame(list_of_draws[param_name])
-  sampQuantiles <- colQuantiles(list_of_draws[[param_name]], na.rm = T, probs = c(0.025, 0.50, 0.975))
+list_of_draws <- rstan::extract(r0_mod)
+
+pullSamples <- function(validationName, genQuantName, percentiles = 95){
+  indexes <- which(mod_data$validationtype == validationName)
+  samps <- list_of_draws[[genQuantName]][, indexes]
+  if(percentiles == 50){
+    sampQuantiles <- colQuantiles(samps, na.rm = T, probs = c(0.25, 0.50, 0.75))
+  } else {
+    sampQuantiles <- colQuantiles(samps, na.rm = T, probs = c(0.025, 0.50, 0.975))
+  }
   sampQuantiles <- ifelse(sampQuantiles < 0, 0, sampQuantiles)
   return(sampQuantiles)
 }
 
-plot_temperature_samples <- function(mod, param_name, df, plotPoints){
-  # pull model samples
-  if(grepl('R0', param_name) == FALSE){
-    param_name <- paste0(param_name, '_climate_new')
+plotParameterSamples <- function(validationName, genQuantName, points){
+  # get samples
+  x <- pullSamples(validationName = validationName, genQuantName = genQuantName)
+  # get data
+  indexes <- which(mod_data$validationtype == validationName)
+  if(grepl('climate', genQuantName) == TRUE){
+    xvals <- mod_data$temp_new[indexes]
+    xLabel <- expression(paste("Temperature (",degree,"C)"))
+    pointDataXColName <- gsub('_new', '_temp', genQuantName)
+  } else if(grepl('ancestry', genQuantName) == TRUE){
+    xvals <- mod_data$aa_new[indexes]
+    xLabel <- 'Proportion Ae. aegypti ancestry'
+    pointDataXColName <- gsub('_new', '_aa', genQuantName)
   }
-  x <- pullSamples(mod = mod, param_name = param_name)
+  pointDataYColName <- gsub('_new', '', genQuantName)
   # set plotting conditions
-  xvals <- df[['climate_temp_new']]
-  xLabel <- expression(paste("Temperature (",degree,"C)"))
   yMax = max(x[,3])
   # plot
-  plot(xvals, x[,2], type = 'l', lwd = 2, ylab = param_name, xlab = xLabel, ylim = c(0, yMax), main = param_name)
-  lines(xvals,x[,1], lty=2, col='red', ylim=c(0,yMax))
+  plot(xvals, x[,2], type = 'l', lwd = 2, ylab = genQuantName, xlab = xLabel, ylim = c(0, yMax), main = genQuantName)
+  lines(xvals, x[,1], lty=2, col='red', ylim=c(0,yMax))
   lines(xvals, x[,3], lty=2, col='red', ylim=c(0,yMax))
   # add points
-  if(plotPoints == TRUE){
-    param_name_orig <- gsub('_new', '', param_name)
-    param_vals <- gsub('_new', '_temp', param_name)
-    points(df[[param_vals]], df[[param_name_orig]], pch=16, ylim=c(0,yMax))
+  if(points == TRUE){
+    points(mod_data[[pointDataXColName]], mod_data[[pointDataYColName]], pch=16, ylim=c(0,yMax))
   }
 }
 
-
-# plot temperature dependent traits and R0 model -------------------------------
 pdf('figures/R0_Zika_trait_fit_plots.pdf', width = 11, height = 8.5)
 par(mfrow = c(2, 3)) 
-plot_temperature_samples(mod = r0_mod, param_name = 'alpha', df = mod_data, plotPoints = T)
-plot_temperature_samples(mod = r0_mod, param_name = 'b', df = mod_data, plotPoints = T)
-plot_temperature_samples(mod = r0_mod, param_name = 'pMI', df = mod_data, plotPoints = T)
-plot_temperature_samples(mod = r0_mod, param_name = 'EIR', df = mod_data, plotPoints = T)
-plot_temperature_samples(mod = r0_mod, param_name = 'lf', df = mod_data, plotPoints = T)
-plot_temperature_samples(mod = r0_mod, param_name = 'R0_climate', df = mod_data, plotPoints = F)
-dev.off()
-
-
-# omega vs ancestry
-aa_key <- data.frame('key' = as.character(seq(1, 66, 1)), 'aa' = mod_data$ancestry_aa_new)
-
-list_of_draws <- rstan::extract(r0_mod)
-aa_samps <- data.frame(list_of_draws['omega_ancestry_new'])
-aa_samps_long <- aa_samps %>% gather()
-aa_samps_long$key <- gsub('omega_ancestry_new.', '', aa_samps_long$key)
-aa_samps_long <- aa_samps_long %>% left_join(aa_key) %>%
-  group_by(aa) %>%
-  summarise('lower' = quantile(value, 0.025)
-            , 'median' = quantile(value, 0.50)
-            , 'upper' = quantile(value, 0.975)
-            )
-
-pdf('figures/Omega_fit.pdf', width = 11, height = 8.5)
-plot(aa_samps_long$aa, aa_samps_long$median, type = 'l', ylim= c(0,1), xlab = 'Proportion Ae. aegypti ancestry', ylab = 'Omega (prob biting humans | ancestry)', cex = 1.2)
-lines(aa_samps_long$aa, aa_samps_long$lower, lty=2, col='red')
-lines(aa_samps_long$aa, aa_samps_long$upper, lty=2, col='red')
-points(mod_data$omega_ancestry_aa, mod_data$omega_ancestry, pch = 16)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'alpha_climate_new', points = T)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'b_climate_new', points = T)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'pMI_climate_new', points = T)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'EIR_climate_new', points = T)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'lf_climate_new', points = T)
+plotParameterSamples(validationName = 'ancestry', genQuantName = 'omega_ancestry_new', points = T)
 dev.off()
 
 # pMI ancestry modeled across strains and doses ---------------------------------
-pred_indexes <- names(r0_mod)[grep('pMI_ancestry_new', names(r0_mod))]
-pred_estimates <- rstan::extract(r0_mod, pred_indexes)
-pred_estimates <- lapply(pred_estimates, quantile, probs=c(0.025,0.50,0.975), na.rm=TRUE)
-pred_estimates_quants <- do.call(rbind.data.frame, pred_estimates)
-colnames(pred_estimates_quants) <- c('lower', 'median', 'upper')
 
-pred_estimates_quants$anc <- mod_data$ancestry_aa_new
-pred_estimates_quants$Dose <- mod_data$ancestry_dose_new
-pred_estimates_quants$Virus <- mod_data$ancestry_Virus_new
-pred_estimates_quants$Virus <- ifelse(pred_estimates_quants$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
+concatAncestrySamples <- function(validationName, genQuantName, percentiles){
+  # get data
+  x <- pullSamples(validationName = validationName, genQuantName = genQuantName, percentiles)
+  x <- as.data.frame(x)
+  colnames(x) <- c('lower', 'median', 'upper')
+  indexes <- which(mod_data$validationtype == validationName)
+  x$anc <- mod_data$aa_new[indexes]
+  x$Dose <- mod_data$dose_new[indexes]
+  x$Virus <- mod_data$Virus_new[indexes]
+  x$Virus <- ifelse(x$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
+  return(x)  
+}
 
-ggplot(pred_estimates_quants, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
-  geom_line() +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
-  facet_wrap(~Virus) +
-  theme_classic() +
-  xlab('aa ancestry') +
-  ylab('Pr(Infection)')
-
-ggsave('figures/pMI_ancestry_model.pdf')  
-
-
-plot_ancestry_R0 <- function(param_name, extraThinning = F){
-  pred_indexes <- names(r0_mod)[grep(param_name, names(r0_mod))]
-  
-  if(extraThinning == T){
-    pred_indexes <- pred_indexes[!grepl('omega|pMI|surveys', pred_indexes)]
-  }
-  
-  pred_estimates <- rstan::extract(r0_mod, pred_indexes)
-  pred_estimates <- lapply(pred_estimates, quantile, probs=c(0.025,0.50,0.975), na.rm=TRUE)
-  pred_estimates_quants <- do.call(rbind.data.frame, pred_estimates)
-  colnames(pred_estimates_quants) <- c('lower', 'median', 'upper')
-  
-  pred_estimates_quants$anc <- mod_data$ancestry_aa_new
-  pred_estimates_quants$Dose <- mod_data$ancestry_dose_new
-  pred_estimates_quants$Virus <- mod_data$ancestry_Virus_new
-  pred_estimates_quants$Virus <- ifelse(pred_estimates_quants$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
-    
-  if(param_name == 'pMI_ancestry_new'){
+ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
+  # get data
+  x <- concatAncestrySamples(validationName = validationName, genQuantName = genQuantName, percentiles = 95)
+  # plot labels
+  if(genQuantName == 'pMI_ancestry_new'){
     yLabel = 'Pr(Infection)'
   } else {
     yLabel = 'R0'
   }
-  
-  ggplot(pred_estimates_quants, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
+  # plot
+  ggplot(x, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
     geom_line() +
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
     facet_wrap(~Virus) +
-    # facet_wrap(~Virus+Dose) +
     theme_classic() +
-    xlab('Proportion Ae. aegypti ancestry') +
+    xlab('aa ancestry') +
     ylab(yLabel)
   
 }
 
+ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'pMI_ancestry_new')
+ggsave('figures/pMI_ancestry_model.pdf')  
 
-plot_ancestry_R0(param_name = 'pMI_ancestry_new')
-ggsave('figures/pMI_ancestry_model.pdf') 
 
-plot_ancestry_R0(param_name = 'R0_ancestry_pMI')
-ggsave('figures/R0_ancestry_pMI.pdf') 
+# R0 models --------------------------------------------------------------------
+ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'R0_ancestry_new')
+ggsave('figures/R0_ancestry.pdf')
 
-plot_ancestry_R0(param_name = 'R0_ancestry_omega')
-ggsave('figures/R0_ancestry_omega.pdf') 
+pdf('figures/R0_climate.pdf', width = 8, height = 6)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'R0_climate_new', points = F)
+dev.off()
 
-plot_ancestry_R0(param_name = 'R0_ancestry', extraThinning = T) # R0_ancestry\\[.\\d]
-ggsave('figures/R0_ancestry.pdf') 
+# survey site scatterplots -----------------------------------------------------
+surveys_r0_ancestry <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_ancestry_new', percentiles = 50)
+# surveys_r0_ancestry$model <- 'ancestry'
+colnames(surveys_r0_ancestry) <- paste0('Ancestry_', colnames(surveys_r0_ancestry))
 
-# altnerative save wrap by virus + dose
-ggsave('figures/R0_ancestry2.pdf') 
+surveys_r0_climate <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_climate_new', percentiles = 50)
+# surveys_r0_climate$model <- 'climate'
+colnames(surveys_r0_climate) <- paste0('Climate_', colnames(surveys_r0_climate))
 
-# survey site R0 plots ---------------------------------------------------------
-pullSamples50 <- function(mod, param_name){
-  list_of_draws <- rstan::extract(mod)
-  samps <- data.frame(list_of_draws[param_name])
-  sampQuantiles <- colQuantiles(list_of_draws[[param_name]], na.rm = T, probs = c(0.25, 0.50, 0.75))
-  sampQuantiles <- ifelse(sampQuantiles < 0, 0, sampQuantiles)
-  return(sampQuantiles)
+surveys_r0_full <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_full_new', percentiles = 50)
+# surveys_r0_full$model <- 'full'
+colnames(surveys_r0_full) <- paste0('Full_', colnames(surveys_r0_full))
+
+# siteR0Estimates <- do.call(rbind, list(surveys_r0_ancestry, surveys_r0_climate, surveys_r0_full))
+siteR0Estimates <- do.call(cbind, list(surveys_r0_ancestry, surveys_r0_climate, surveys_r0_full))
+
+
+############### STOPPED HERE
+############### NEED TO FIGURE OUT HOW TO DO 3-PLOT
+gridPlotDoseVirus <- function(df, xval, yval){
+  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
+    geom_point() +
+    facet_wrap(~Virus + Dose) +
+    theme_bw() +
+    ylim(0,4) +
+    xlim(0,4) +
+    geom_hline(yintercept = 1) +
+    geom_vline(xintercept = 1) +
+    xlab(xval) +
+    ylab(yval) 
 }
 
-format_survey_samples <- function(paramName){
-  r0vals <- pullSamples50(mod = r0_mod, param_name = paramName)
-  r0vals <- as.data.frame(r0vals)
-  colnames(r0vals) <- c('lower', 'median', 'upper')
-  colnames(r0vals) <- paste(paramName, colnames(r0vals), sep = '_')
-  r0vals$anc <- mod_data$surveys_aa
-  r0vals$Virus <- mod_data$surveys_Virus
-  r0vals$Dose <- mod_data$surveys_dose
-  r0vals$site <- mod_data$surveys_location
-  # r0vals$model <- paramName
-  return(r0vals)
+
+plotSurveySites <- function(virus, dose){
+    
 }
 
-ss_r0_climate <- format_survey_samples(paramName = 'R0_climate_surveys')
-ss_r0_ancestry <- format_survey_samples(paramName = 'R0_ancestry_surveys')
-ss_r0_full <- format_survey_samples(paramName = 'R0_full_surveys')
 
-ss <- ss_r0_climate %>%
-  left_join(ss_r0_ancestry) %>%
-  left_join(ss_r0_full)
+df <- subset(siteR0Estimates, Virus == 'ZIKV_Cambodia_2010' & Dose == 1275000)
 
-ss$Virus <- ifelse(ss$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
+ggplot(df, aes())
+# siteR0Estimates <- do.call(cbind, list(surveys_r0_ancestry, surveys_r0_climate, surveys_r0_full))
+
+# format_survey_samples <- function(paramName){
+#   r0vals <- pullSamples50(mod = r0_mod, param_name = paramName)
+#   r0vals <- as.data.frame(r0vals)
+#   colnames(r0vals) <- c('lower', 'median', 'upper')
+#   colnames(r0vals) <- paste(paramName, colnames(r0vals), sep = '_')
+#   r0vals$anc <- mod_data$surveys_aa
+#   r0vals$Virus <- mod_data$surveys_Virus
+#   r0vals$Dose <- mod_data$surveys_dose
+#   r0vals$site <- mod_data$surveys_location
+#   # r0vals$model <- paramName
+#   return(r0vals)
+# }
+# 
+# ss_r0_climate <- format_survey_samples(paramName = 'R0_climate_surveys')
+# ss_r0_ancestry <- format_survey_samples(paramName = 'R0_ancestry_surveys')
+# ss_r0_full <- format_survey_samples(paramName = 'R0_full_surveys')
+# 
+# ss <- ss_r0_climate %>%
+#   left_join(ss_r0_ancestry) %>%
+#   left_join(ss_r0_full)
+
+# ss$Virus <- ifelse(ss$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
 
 gridPlotDoseVirus <- function(df, xval, yval){
   ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +

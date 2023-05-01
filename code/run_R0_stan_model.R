@@ -5,7 +5,7 @@ library(rstan)
 load('../VBD-data/model_data_zikv.RData')
 
 # avoid recompilation
-rstan_options(auto_write = TRUE)
+# rstan_options(auto_write = TRUE)
 # options(mc.cores = parallel::detectCores())
 
 # fit model
@@ -14,7 +14,7 @@ stan_model_fit_zikv <-
     stan_model('code/R0_model.stan')
   , data = model_data_zikv
   , iter = 10000
-  , cores = parallel::detectCores()
+  # , cores = parallel::detectCores()
   # , cores = 3
   )
 

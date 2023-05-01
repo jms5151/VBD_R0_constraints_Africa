@@ -122,7 +122,7 @@ new_data <- do.call(rbind, list(
   zikv_new
   , temp_df
   , survey_new
-  , map_data
+  # , map_data
 ))
 
 # new_data <- new_data[1:1500, ]
