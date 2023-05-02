@@ -143,7 +143,7 @@ plotParameterSamples(validationName = 'temperature', genQuantName = 'lf_climate_
 plotParameterSamples(validationName = 'ancestry', genQuantName = 'omega_ancestry_new', points = T)
 dev.off()
 
-# pMI ancestry modeled across strains and doses ---------------------------------
+# pMI ancestry modeled across strains and doses ---
 
 concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   # get data
@@ -155,6 +155,7 @@ concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   x$Dose <- mod_data$dose_new[indexes]
   x$Virus <- mod_data$Virus_new[indexes]
   x$Virus <- ifelse(x$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
+  x$site = mod_data$location[indexes]
   return(x)  
 }
 
@@ -192,91 +193,15 @@ dev.off()
 
 # survey site scatterplots -----------------------------------------------------
 surveys_r0_ancestry <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_ancestry_new', percentiles = 50)
-# surveys_r0_ancestry$model <- 'ancestry'
-colnames(surveys_r0_ancestry) <- paste0('Ancestry_', colnames(surveys_r0_ancestry))
+colnames(surveys_r0_ancestry)[1:3] <- paste0('Ancestry_', colnames(surveys_r0_ancestry)[1:3])
 
 surveys_r0_climate <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_climate_new', percentiles = 50)
-# surveys_r0_climate$model <- 'climate'
-colnames(surveys_r0_climate) <- paste0('Climate_', colnames(surveys_r0_climate))
+colnames(surveys_r0_climate)[1:3] <- paste0('Climate_', colnames(surveys_r0_climate)[1:3])
 
 surveys_r0_full <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_full_new', percentiles = 50)
-# surveys_r0_full$model <- 'full'
-colnames(surveys_r0_full) <- paste0('Full_', colnames(surveys_r0_full))
+colnames(surveys_r0_full)[1:3] <- paste0('Full_', colnames(surveys_r0_full)[1:3])
 
-# siteR0Estimates <- do.call(rbind, list(surveys_r0_ancestry, surveys_r0_climate, surveys_r0_full))
-siteR0Estimates <- do.call(cbind, list(surveys_r0_ancestry, surveys_r0_climate, surveys_r0_full))
-
-
-############### STOPPED HERE
-############### NEED TO FIGURE OUT HOW TO DO 3-PLOT
-gridPlotDoseVirus <- function(df, xval, yval){
-  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
-    geom_point() +
-    facet_wrap(~Virus + Dose) +
-    theme_bw() +
-    ylim(0,4) +
-    xlim(0,4) +
-    geom_hline(yintercept = 1) +
-    geom_vline(xintercept = 1) +
-    xlab(xval) +
-    ylab(yval) 
-}
-
-
-plotSurveySites <- function(virus, dose){
-    
-}
-
-
-df <- subset(siteR0Estimates, Virus == 'ZIKV_Cambodia_2010' & Dose == 1275000)
-
-ggplot(df, aes())
-# siteR0Estimates <- do.call(cbind, list(surveys_r0_ancestry, surveys_r0_climate, surveys_r0_full))
-
-# format_survey_samples <- function(paramName){
-#   r0vals <- pullSamples50(mod = r0_mod, param_name = paramName)
-#   r0vals <- as.data.frame(r0vals)
-#   colnames(r0vals) <- c('lower', 'median', 'upper')
-#   colnames(r0vals) <- paste(paramName, colnames(r0vals), sep = '_')
-#   r0vals$anc <- mod_data$surveys_aa
-#   r0vals$Virus <- mod_data$surveys_Virus
-#   r0vals$Dose <- mod_data$surveys_dose
-#   r0vals$site <- mod_data$surveys_location
-#   # r0vals$model <- paramName
-#   return(r0vals)
-# }
-# 
-# ss_r0_climate <- format_survey_samples(paramName = 'R0_climate_surveys')
-# ss_r0_ancestry <- format_survey_samples(paramName = 'R0_ancestry_surveys')
-# ss_r0_full <- format_survey_samples(paramName = 'R0_full_surveys')
-# 
-# ss <- ss_r0_climate %>%
-#   left_join(ss_r0_ancestry) %>%
-#   left_join(ss_r0_full)
-
-# ss$Virus <- ifelse(ss$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
-
-gridPlotDoseVirus <- function(df, xval, yval){
-  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
-    geom_point() +
-    facet_wrap(~Virus + Dose) +
-    theme_bw() +
-    ylim(0,4) +
-    xlim(0,4) +
-    geom_hline(yintercept = 1) +
-    geom_vline(xintercept = 1) +
-    xlab(xval) +
-    ylab(yval) 
-}
-
-gridPlotDoseVirus(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
-ggsave('figures/R0_surveys_climate_vs_ancestry.pdf', height = 8.5, width = 11) 
-
-gridPlotDoseVirus(df = ss, xval = 'R0_full_surveys_median', yval = 'R0_climate_surveys_median')
-ggsave('figures/R0_surveys_full_vs_climate.pdf', height = 8.5, width = 11) 
-
-gridPlotDoseVirus(df = ss, xval = 'R0_full_surveys_median', yval = 'R0_ancestry_surveys_median')
-ggsave('figures/R0_surveys_full_vs_ancestry.pdf', height = 8.5, width = 11) 
+siteR0Estimates <- surveys_r0_ancestry %>% left_join(surveys_r0_climate) %>% left_join(surveys_r0_full)
 
 plotWithUncertainty <- function(df, xval, yval){
   xupper <- gsub('_median', '_upper', xval)
@@ -284,7 +209,7 @@ plotWithUncertainty <- function(df, xval, yval){
   yupper <- gsub('_median', '_upper', yval)
   ylower <- gsub('_median', '_lower', yval)
   df$site <- ifelse(df[,xval] > 1 & df[,yval] > 1, df$site, '')
-
+  
   ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
     geom_errorbarh(aes_string(xmax = df[,xupper], xmin = df[,xlower]), col = 'darkgrey') +
     geom_errorbar(aes_string(ymax = df[,yupper], ymin = df[,ylower]), col = 'darkgrey') +
@@ -297,29 +222,47 @@ plotWithUncertainty <- function(df, xval, yval){
     geom_vline(xintercept = 1,linetype=2) +
     xlab(gsub('_|surveys|median', ' ', xval)) +
     ylab(gsub('_|surveys|median', ' ', yval)) +
-    geom_text_repel(aes(label = site))
+    geom_text_repel(aes(label = site)) +
+    theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm"))
 }
 
-# highlight since dose and site
-cambodia_low_dose <- subset(ss, Virus == 'ZIKV_Cambodia_2010' & Dose == 1275000)
 
-cam1 <- plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_climate_surveys_median', yval = 'R0_ancestry_surveys_median')
-# ggsave('figures/R0_surveys_climate_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+plotSurveySites <- function(virus, dose){
+  # subset
+  x <- subset(siteR0Estimates, Virus == virus & Dose == dose)
+  # plot
+  clim_vs_anc <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Ancestry_median')
+  clim_vs_full <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Full_median')
+  full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median')
+  # return grid of plots
+  plot_grid(clim_vs_anc, clim_vs_full, full_vs_anc, nrow = 1) + ggtitle(paste0(virus, ' x ', dose))
+}
 
-cam2 <- plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_climate_surveys_median')
-# ggsave('figures/R0_surveys_full_vs_climate_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+camLow <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 1275000)
+ggsave('figures/R0_scatterplot_cambodia_low_dose.pdf.pdf', camLow, width = 12, height = 4)
 
-cam3 <- plotWithUncertainty(df = cambodia_low_dose, xval = 'R0_full_surveys_median', yval = 'R0_ancestry_surveys_median')
-# ggsave('figures/R0_surveys_full_vs_ancestry_cambodia_low_dose.pdf', height = 8.5, width = 11) 
+camMid <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 4375000)
+camHigh <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 40000000)
+senLow <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 1275000)
+senMid <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 4375000)
+senHigh <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 40000000)
 
-cam <- plot_grid(cam1, cam2, cam3, nrow = 1)
-ggsave('figures/R0_scatterplot_cambodia_low_dose.pdf.pdf', cam, width = 12, height = 4)
+virusxdose <- plot_grid(camMid
+                        , camHigh
+                        , senLow
+                        , senMid
+                        , senHigh
+                        , nrow = 5
+                        , labels = c('Cambodia 2010 Zika strain, medium dose'
+                                     , 'Cambodia 2010 Zika strain, high dose'
+                                     , 'Senegal 2011 Zika strain, low dose'
+                                     , 'Senegal 2011 Zika strain, medium dose'
+                                     , 'Senegal 2011 Zika strain, high dose')
+                        , hjust = -0.2
+                        )
 
-# summary
-cambodia_low_dose_summary <- cambodia_low_dose %>%
-  summarise(climate_N = sum(R0_climate_surveys_median > 1)
-            , ancestry_N = sum(R0_ancestry_surveys_median > 1)
-            , full_N = sum(R0_full_surveys_median > 1))
+
+ggsave('figures/R0_scatterplots_all_strains_and_doses.pdf', virusxdose, width = 8.5, height = 11)
 
 # prior vs posterior plots -----------------------------------
 
@@ -353,24 +296,6 @@ overlay_distributions_plot <- function(mod, param_name, type, priorValue1, prior
       )
   }
 }
-
-# overlay_distributions_plot <- function(mod, param_name, priorMean, priorSD){
-#   # get posterior distribution
-#   df <- as.data.frame(rstan::extract(mod, param_name))
-#   # plot
-#   ggplot(df, aes_string(param_name)) +
-#     geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'yellow', alpha = 0.4) +
-#     stat_function(
-#       fun = dunif, 
-#       args = list(min = priorMin, max = priorMax), 
-#       lwd = 2, 
-#       col = 'black'
-#     ) +
-#     theme_classic() +
-#     ggtitle(param_name) +
-#     ylab('') +
-#     xlab('')
-# }
 
 a_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_constant', type = 'normal', priorValue1 = 2.02E-04, priorValue2 = 0.01)
 a_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmin', type = 'normal', priorValue1 =  13.35, priorValue2 = 20)
