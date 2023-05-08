@@ -53,7 +53,7 @@ params <- c('omega_ancestry_constant'
             , 'lf_climate_sigma'
 )
 pdf('figures/R0_stan_zikv_traceplots.pdf', width = 11, height = 8.5)
-rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 5, nrow = 6)
+rstan::traceplot(r0_mod, par = c('lp__', params[2:4]), ncol = 5, nrow = 6)
 dev.off()
 
 # ppc plots --------------------------------------------------------
@@ -156,6 +156,10 @@ concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   x$Virus <- mod_data$Virus_new[indexes]
   x$Virus <- ifelse(x$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
   x$site = mod_data$location[indexes]
+  x$year = mod_data$year[indexes]
+  x$temp = mod_data$temp_new[indexes]
+  x$lat = mod_data$lat[indexes]
+  x$lon = mod_data$lon[indexes]
   return(x)  
 }
 
@@ -263,6 +267,109 @@ virusxdose <- plot_grid(camMid
 
 
 ggsave('figures/R0_scatterplots_all_strains_and_doses.pdf', virusxdose, width = 8.5, height = 11)
+
+# big cities through time ------------------------------------
+bc <- concatAncestrySamples(validationName = 'big_cities', genQuantName = 'R0_full_new', percentiles = 95)
+
+# OPTION 1: time series
+ts <- ggplot(bc, aes(x = year, y = median, group = site)) + 
+  geom_line(col = 'grey') + 
+  theme_bw() +
+  geom_hline(yintercept = 1, linetype = 2) +
+  ylab('R0') +
+  xlab('Year') +
+  ggtitle('R0 through time')
+
+ggsave('figures/big_cities_option1_timeseries.pdf', ts, width = 11, height = 8.5)
+  
+# OPTION 2: scatterplots, compare 2010 with 2100
+bcScatter <- bc %>%
+  filter(year == 2010 | year == 2100)
+
+scatterComparison <- ggplot(bcScatter, aes(x = temp, y = anc, size = median)) +
+  scale_size_continuous(name = 'R0') +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  ylab('aaa ancestry') +
+  xlab('Temperature') +
+  facet_grid(~year) +
+  ggtitle('Change in R0 from 2010 - 2100')
+
+ggsave('figures/big_cities_option2_scatter.pdf', scatterComparison, width = 11, height = 5)
+
+# OPTION 3a: lollipop chart, compare 2010 with 2100
+bcLollipop1 <- bcScatter[,c('site', 'year', 'median')] %>%
+  spread(key = year, value = median) 
+
+colnames(bcLollipop1)[2:3] <- paste0('Year_', colnames(bcLollipop1)[2:3])
+
+lollipop1 <- ggplot(bcLollipop1) +
+  geom_segment(aes(x = Year_2010, xend = Year_2100, y = site, yend = site)) +
+  geom_point(aes(x = Year_2010, y = site)) +
+  geom_point(aes(x = Year_2100, y = site)) +
+  theme_bw() +
+  xlab('R0 (2010-2100)') +
+  ylab('') +
+  geom_vline(xintercept = 1, linetype = 2) +
+  ggtitle('Change in R0 from 2010 - 2100')
+
+ggsave('figures/big_cities_option3a_lollipop.pdf', lollipop1, width = 8, height = 11)
+
+# OPTION 3b: lollipop chart, decade in which R0 crosses 0
+bcLollipop2 <- bc %>%
+  filter(median >= 1) %>%
+  group_by(site) %>%
+  arrange(median) %>%
+  slice_head(n = 1)
+
+
+lollipop2 <- ggplot(bcLollipop2, aes(x = site, y = year)) +
+  geom_segment(aes(x = site, xend = site, y = 2010, yend = year)) +
+  geom_point(aes(y = year)) +
+  coord_flip() +
+  theme_bw() +
+  xlab('') +
+  ylab('Year') +
+  ggtitle('Decade in which R0 > 1')
+
+ggsave('figures/big_cities_option3b_lollipop.pdf', lollipop2, width = 11, height = 6)
+
+# OPTION 4: radar plot
+library(fmsb)
+
+bcRadar <- bc[,c('median', 'site', 'year')] %>%
+  spread(key = year, value = median)
+rownames(bcRadar) <- bcRadar$site
+bcRadar$site <- NULL
+
+r0Max = 4
+max_min <- data.frame(
+  '2010' = c(r0Max, 0)
+  , '2020' = c(r0Max, 0)
+  , '2030' = c(r0Max, 0)
+  , '2040' = c(r0Max, 0)
+  , '2050' = c(r0Max, 0)
+  , '2060' = c(r0Max, 0)
+  , '2070' = c(r0Max, 0)
+  , '2080' = c(r0Max, 0)
+  , '2090' = c(r0Max, 0)
+  , '2100' = c(r0Max, 0)
+)
+
+colnames(max_min) <- gsub('X', '', colnames(max_min))
+rownames(max_min) <- c('Max', 'Min')
+
+bcRadar <- rbind(max_min, bcRadar)
+
+pdf('figures/big_cities_option4_radar_plot.pdf', width = 8, height = 8)
+radarChart <- radarchart(bcRadar
+                         , axistype = 1
+                         , cglcol="grey"
+                         , cglty=1
+                         , axislabcol="grey"
+                         , caxislabels=seq(0,4,0.5)
+                         , cglwd=0.8)  
+dev.off()
 
 # prior vs posterior plots -----------------------------------
 

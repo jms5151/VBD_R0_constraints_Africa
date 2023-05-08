@@ -5,6 +5,9 @@ library(ggmap)
 # source api key
 source('../google_api_key.R')
 
+# register api key
+register_google(gkey)
+
 # Load list of cities
 cities <- read.csv('../VBD-data/african_cities.csv')
 

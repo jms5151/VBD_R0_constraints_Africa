@@ -52,9 +52,9 @@ zikv <- rbind(
 # order the data
 zikv <- zikv %>% arrange(Trials, Infected)
 
-# create simulated new datasets and format to combine
+# create simulated new datasets and format to combine --------------------------
 
-# ancestry
+# ancestry ---
 anc_new <- seq(0, 1, 0.1)
 dose_new <- unname(quantile(zikv$Dose, c(0.25, 0.5, 0.75)))
 virus_new <- c(0,1)
@@ -68,12 +68,13 @@ zikv_new <- zikv_new %>%
     'Location' = rep(NA, nrow(zikv_new))
     , 'lon' = rep(NA, nrow(zikv_new))
     , 'lat' = rep(NA, nrow(zikv_new))
+    , 'year' = rep(NA, nrow(zikv_new))
     , 'validation_type' = 'ancestry'
   )
 
 zikv_new <- cbind('temp' = rep(29, nrow(zikv_new)), zikv_new)
 
-# temperature
+# temperature ---
 temp_new  <- seq(10,40,0.1)
 
 temp_df <- data.frame(
@@ -84,10 +85,11 @@ temp_df <- data.frame(
   , 'Location' = rep(NA, length(temp_new))
   , 'lon' = rep(NA, length(temp_new))
   , 'lat' = rep(NA, length(temp_new))
+  , 'year' = rep(NA, length(temp_new))
   , 'validation_type' = 'temperature'
 )
 
-# survey data
+# survey data ---
 survey_data <- read.csv('../VBD-data/combined_meta_allpops.csv')
 survey_data <- subset(survey_data, !is.na(prop_aaa_ancestry))
 
@@ -97,35 +99,69 @@ survey_new <- survey_new %>%
   left_join(survey_data[,c('Location', 'prop_aaa_ancestry', 'bio.bio8_temp_wetq')]) %>%
   mutate('lat' = rep(NA, nrow(survey_new))
          , 'lon' = rep(NA, nrow(survey_new))
+         , 'year' = rep(NA, nrow(survey_new))
          , 'validation_type' = 'surveys'
          )
 
 colnames(survey_new)[4:5] <- c('anc', 'temp')
 survey_new <- survey_new[, colnames(temp_df)]
 
-# map data
-map_data <- read.csv('../VBD-data/map_variables.csv')
-colnames(map_data) <- c('lon', 'lat', 'anc', 'temp')
+# map data ---
+# map_data <- read.csv('../VBD-data/map_variables.csv')
+# colnames(map_data) <- c('lon', 'lat', 'anc', 'temp')
+# 
+# map_data <- map_data %>%
+#   mutate(
+#     'Dose' = rep(min(zikv_new$Dose), nrow(map_data))
+#     , 'Virus'= rep(0, nrow(map_data))
+#     , 'validation_type' = 'map'
+#     , 'Location' = NA
+#   )
+#   
+# map_data <- map_data[, colnames(temp_df)]
 
-map_data <- map_data %>%
-  mutate(
-    'Dose' = rep(min(zikv_new$Dose), nrow(map_data))
-    , 'Virus'= rep(0, nrow(map_data))
-    , 'validation_type' = 'map'
-    , 'Location' = NA
+# new_data <- new_data[1:1500, ]
+
+# African cities time series data ---
+# load & format aaa data
+aaa_cities <- read.csv('../VBD-data/african_cities_2100aaa.csv')
+
+# wide to long
+aaa_cities <- aaa_cities %>% gather('Variable', 'anc', bio.bio15:tip) 
+
+# remove variables other than IDs, ancestry, and year
+aaa_cities <- aaa_cities[str_detect(aaa_cities$Variable, '^aaa'),]
+
+# Make new Year column
+aaa_cities$year <- as.numeric(gsub('aaa', '', aaa_cities$Variable))
+
+# load temperature data
+cmip6ssp585 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_ssp585.csv')
+
+# format temperature from kelvin to celsius
+cmip6ssp585$temp <- cmip6ssp585$mean - 273.15
+
+# combine ancestry and temperature data for cities
+big_cities <- aaa_cities %>% 
+  left_join(cmip6ssp585[,c('City', 'year', 'temp')]) %>%
+  mutate('Dose' = rep(min(zikv_new$Dose), nrow(big_cities))
+    , 'Virus' = rep(0, nrow(big_cities))
+    , 'Location' = paste0(City, ', ', Country)
+    , 'lon' = Longitude
+    , 'lat' = Latitude
+    , 'validation_type' = 'big_cities'
   )
-  
-map_data <- map_data[, colnames(temp_df)]
 
-# combine new data
+big_cities <- big_cities[, colnames(zikv_new)]
+
+# combine new data ---
 new_data <- do.call(rbind, list(
   zikv_new
   , temp_df
   , survey_new
   # , map_data
+  , big_cities
 ))
-
-# new_data <- new_data[1:1500, ]
 
 # combine all data to fit and generate data with Zika model
 model_data_zikv <-
@@ -166,6 +202,7 @@ model_data_zikv <-
     , location = new_data$Location
     , lon = new_data$lon
     , lat = new_data$lat
+    , year = new_data$year
     , validationtype = new_data$validation_type
     # , ancestry_N_new = nrow(zikv_new)
     # , ancestry_X_new = model.matrix(~0 + scale(anc) + log(Dose), data = zikv_new)
