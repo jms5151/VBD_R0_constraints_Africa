@@ -53,7 +53,7 @@ params <- c('omega_ancestry_constant'
             , 'lf_climate_sigma'
 )
 pdf('figures/R0_stan_zikv_traceplots.pdf', width = 11, height = 8.5)
-rstan::traceplot(r0_mod, par = c('lp__', params[2:4]), ncol = 5, nrow = 6)
+rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 5, nrow = 6)
 dev.off()
 
 # ppc plots --------------------------------------------------------
@@ -298,22 +298,46 @@ scatterComparison <- ggplot(bcScatter, aes(x = temp, y = anc, size = median)) +
 ggsave('figures/big_cities_option2_scatter.pdf', scatterComparison, width = 11, height = 5)
 
 # OPTION 3a: lollipop chart, compare 2010 with 2100
-bcLollipop1 <- bcScatter[,c('site', 'year', 'median')] %>%
+bcLollipop1 <- bc[,c('site', 'year', 'median')] %>%
+  filter(year == '1970' | year == '2015' | year == '2090-2100') %>%
   spread(key = year, value = median) 
 
-colnames(bcLollipop1)[2:3] <- paste0('Year_', colnames(bcLollipop1)[2:3])
+colnames(bcLollipop1)[2:4] <- paste0('Year_', colnames(bcLollipop1)[2:4])
+colnames(bcLollipop1)[4] <- 'Year_2090_2100'
+
+# add ordered factor
+bcLollipop1$Suitability <- ifelse(bcLollipop1$Year_2090_2100 > 1, 1, 0)
+bcLollipop1$Suitability <- ifelse(bcLollipop1$Year_2015 > 1, 2, bcLollipop1$Suitability)
+bcLollipop1$Suitability <- ifelse(bcLollipop1$Year_1970 > 1, 3, bcLollipop1$Suitability)
+
+bcLollipop1 <- bcLollipop1[order(bcLollipop1$Suitability, bcLollipop1$Year_2090_2100),]
+bcLollipop1$rank <- seq(1, nrow(bcLollipop1), 1)
+
+bcLollipop1$site <- fct_reorder(bcLollipop1$site, bcLollipop1$rank)
+bcLollipop1$Suitability <- as.factor(bcLollipop1$Suitability)
 
 lollipop1 <- ggplot(bcLollipop1) +
-  geom_segment(aes(x = Year_2010, xend = Year_2100, y = site, yend = site)) +
-  geom_point(aes(x = Year_2010, y = site)) +
-  geom_point(aes(x = Year_2100, y = site)) +
+  geom_segment(aes(x = Year_1970, xend = Year_2015, y = site, yend = site, color = Suitability)) +
+  geom_segment(aes(x = Year_2015, xend = Year_2090_2100, y = site, yend = site, color = Suitability)) +
+  geom_point(aes(x = Year_1970, y = site, color = Suitability), pch = 15, size = 2) +
+  geom_point(aes(x = Year_2015, y = site, color = Suitability), pch = 2, size = 2) +
+  geom_point(aes(x = Year_2090_2100, y = site, color = Suitability), pch = 16, size = 2) +
   theme_bw() +
-  xlab('R0 (2010-2100)') +
+  xlab(expression('R'[0])) +
   ylab('') +
   geom_vline(xintercept = 1, linetype = 2) +
-  ggtitle('Change in R0 from 2010 - 2100')
+  ggtitle(expression(paste('Change in ', R[0],' (1970 - 2015 - 2100)'))) +
+  scale_color_manual(
+    values = c('maroon', 'navyblue', 'orange', 'darkgreen'),
+    labels = c('Never', 'Future', 'Present', 'Past'),
+    guide = guide_legend(reverse = TRUE, override.aes=list(linetype = 1, shape = NA, lwd = 1.3))
+    ) 
 
-ggsave('figures/big_cities_option3a_lollipop.pdf', lollipop1, width = 8, height = 11)
+# lollipop1 + annotate(geom = "text", x = 4, y = 10, label = "subaru", hjust = "left")
+
+ggsave('figures/big_cities_lollipop_1970-2100.pdf', lollipop1, width = 11, height = 11)
+
+# map: https://bhaskarvk.github.io/user2017.geodataviz/notebooks/02-Static-Maps.nb.html
 
 # OPTION 3b: lollipop chart, decade in which R0 crosses 0
 bcLollipop2 <- bc %>%
@@ -368,7 +392,8 @@ radarChart <- radarchart(bcRadar
                          , cglty=1
                          , axislabcol="grey"
                          , caxislabels=seq(0,4,0.5)
-                         , cglwd=0.8)  
+                         , cglwd=0.8
+                         , title = 'R0 through time')  
 dev.off()
 
 # prior vs posterior plots -----------------------------------

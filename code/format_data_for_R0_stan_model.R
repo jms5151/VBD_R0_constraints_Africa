@@ -1,5 +1,6 @@
 # format data
 library(tidyverse)
+library(gdata)
 
 # temperature dependent trait data ------------------------------------
 traits.df <- read.csv('../VBD-Data/aegypti_traits_temp_formatted.csv')
@@ -124,28 +125,67 @@ survey_new <- survey_new[, colnames(temp_df)]
 
 # African cities time series data ---
 # load & format aaa data
-aaa_cities <- read.csv('../VBD-data/african_cities_2100aaa.csv')
+aaa_cities <- read.csv('../VBD-data/african_cities_1970_2100.csv')
+aaa_cities2 <- read.csv('../VBD-data/african_cities_1970_2015.csv')
+
+# combine
+aaa_cities$aaa2015 <- aaa_cities2$aaa2015
+
+# remove sites from Rose et al. 2015
+aaa_cities <- aaa_cities[29:nrow(aaa_cities),]
 
 # wide to long
-aaa_cities <- aaa_cities %>% gather('Variable', 'anc', bio.bio15:tip) 
+aaa_cities <- aaa_cities %>% gather('Variable', 'anc', bio.bio15:aaa2015) 
 
 # remove variables other than IDs, ancestry, and year
 aaa_cities <- aaa_cities[str_detect(aaa_cities$Variable, '^aaa'),]
 
 # Make new Year column
 aaa_cities$year <- as.numeric(gsub('aaa', '', aaa_cities$Variable))
+# change end of century year to group
+aaa_cities$year <- ifelse(aaa_cities$year > 2080, '2090-2100', aaa_cities$year) 
+
+# average ancestry for end of century estimate
+aaa_cities <- aaa_cities %>%
+  filter(year == '1970' | year == '2015' | year == '2090-2100') %>%
+  group_by(City, Country, Longitude, Latitude, year) %>%
+  summarise(anc = mean(anc)) %>%
+  as.data.frame()
 
 # load temperature data
-cmip6ssp585 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_ssp585.csv')
+gfdl <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_1970_2015_2090-2100.csv')
+miroc <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_MIROC6_1970_2015_2090-2100.csv')
+NorESM2 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_NorESM2-MM_1970_2015_2090-2100.csv')
+GISS <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GISS-E2-1-G_1970_2015_2090-2100.csv')
+INM <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_INM-CM4-8_1970_2015_2090-2100.csv')
+
+# combine
+cmip <- combine(gfdl, miroc, NorESM2, GISS, INM)
 
 # format temperature from kelvin to celsius
-cmip6ssp585$temp <- cmip6ssp585$mean - 273.15
+cmip$temp <- cmip$mean - 273.15
+
+# change end of century year to group
+cmip$year <- ifelse(cmip$year > 2080, '2090-2100', cmip$year) 
+
+# average temperature year grouping
+cmip_mean <- cmip %>%
+  group_by(City, year) %>%
+  summarise(temp = mean(temp)) %>%
+  as.data.frame()
+
+# fix city spelling to match aaa
+# this is a terrible way of doing it, but it works
+cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
+cmip_mean$City[cmip_mean$City == 'Durbané(eThekwini)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+cmip_mean$City[cmip_mean$City == 'East Randé(Ekurhuleni)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+cmip_mean$City[cmip_mean$City == 'Pretoriaé(Tshwane)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
 
 # combine ancestry and temperature data for cities
 big_cities <- aaa_cities %>% 
-  left_join(cmip6ssp585[,c('City', 'year', 'temp')]) %>%
-  mutate('Dose' = rep(min(zikv_new$Dose), nrow(big_cities))
-    , 'Virus' = rep(0, nrow(big_cities))
+  left_join(cmip_mean[,c('City', 'year', 'temp')]) %>%
+  mutate('Dose' = rep(min(zikv_new$Dose), nrow(aaa_cities))
+    , 'Virus' = rep(0, nrow(aaa_cities))
     , 'Location' = paste0(City, ', ', Country)
     , 'lon' = Longitude
     , 'lat' = Latitude
@@ -204,25 +244,6 @@ model_data_zikv <-
     , lat = new_data$lat
     , year = new_data$year
     , validationtype = new_data$validation_type
-    # , ancestry_N_new = nrow(zikv_new)
-    # , ancestry_X_new = model.matrix(~0 + scale(anc) + log(Dose), data = zikv_new)
-    # , ancestry_aa_new = zikv_new$anc
-    # , ancestry_Virus_new = zikv_new$Virus
-    # , ancestry_dose_new = zikv_new$Dose # only needed for assessing output
-    # , surveys_N = nrow(survey_new)
-    # , surveys_temp = survey_new$bio.bio8_temp_wetq
-    # , surveys_aa = survey_new$prop_aaa_ancestry
-    # , surveys_X = model.matrix(~0 + scale(prop_aaa_ancestry) + log(Dose), data = survey_new)
-    # , surveys_Virus = survey_new$Virus
-    # , surveys_dose = survey_new$Dose # only needed for assessing output
-    # , surveys_location = survey_new$Location # only needed for assessing output
-    # , map_N = nrow(map_data)
-    # , map_temp = map_data$wc2.1_10m_bio_8
-    # , map_aa = map_data$prop_aaa_raster
-    # , map_Virus = map_data$Virus
-    # , map_X = model.matrix(~0 + scale(prop_aaa_raster) + log(Dose), data = map_data)
-    # , map_lon = map_data$x # only needed for mapping output
-    # , map_lat = map_data$y # only needed for mapping output
   )
 
 save(model_data_zikv, file = '../VBD-data/model_data_zikv.RData')
