@@ -1,20 +1,164 @@
 # load libraries
 library(rstan)
-# library(shinystan)
 library(boot)
 library(matrixStats)
 library(tidyverse)
 library(ggplot2)
 library(ggrepel)
 library(cowplot)
+library(rnaturalearth)
 
 # open model
 r0_mod <- readRDS('../models/stan_model_fit_zikv.rds')
 load('../VBD-data/model_data_zikv.RData')
 mod_data <- model_data_zikv
 
-# assess model fit
-# launch_shinystan(r0_mod)
+# extract samples
+list_of_draws <- rstan::extract(r0_mod)
+
+# functions --------------------------------------------------------------------
+pullSamples <- function(validationName, genQuantName, percentiles = 95){
+  indexes <- which(mod_data$validationtype == validationName)
+  samps <- list_of_draws[[genQuantName]][, indexes]
+  if(percentiles == 50){
+    sampQuantiles <- colQuantiles(samps, na.rm = T, probs = c(0.25, 0.50, 0.75))
+  } else {
+    sampQuantiles <- colQuantiles(samps, na.rm = T, probs = c(0.025, 0.50, 0.975))
+  }
+  sampQuantiles <- ifelse(sampQuantiles < 0, 0, sampQuantiles)
+  return(sampQuantiles)
+}
+
+plotParameterSamples <- function(validationName, genQuantName, points){
+  # get samples
+  x <- pullSamples(validationName = validationName, genQuantName = genQuantName)
+  # get data
+  indexes <- which(mod_data$validationtype == validationName)
+  if(grepl('climate', genQuantName) == TRUE){
+    xvals <- mod_data$temp_new[indexes]
+    xLabel <- expression(paste("Temperature (",degree,"C)"))
+    pointDataXColName <- gsub('_new', '_temp', genQuantName)
+  } else if(grepl('ancestry', genQuantName) == TRUE){
+    xvals <- mod_data$aa_new[indexes]
+    xLabel <- 'Proportion Ae. aegypti ancestry'
+    pointDataXColName <- gsub('_new', '_aa', genQuantName)
+  }
+  pointDataYColName <- gsub('_new', '', genQuantName)
+  # set plotting conditions
+  yMax = max(x[,3])
+  # plot
+  plot(xvals, x[,2], type = 'l', lwd = 2, ylab = genQuantName, xlab = xLabel, ylim = c(0, yMax), main = genQuantName)
+  lines(xvals, x[,1], lty=2, col='red', ylim=c(0,yMax))
+  lines(xvals, x[,3], lty=2, col='red', ylim=c(0,yMax))
+  # add points
+  if(points == TRUE){
+    points(mod_data[[pointDataXColName]], mod_data[[pointDataYColName]], pch=16, ylim=c(0,yMax))
+  }
+}
+
+concatAncestrySamples <- function(validationName, genQuantName, percentiles){
+  # get data
+  x <- pullSamples(validationName = validationName, genQuantName = genQuantName, percentiles)
+  x <- as.data.frame(x)
+  colnames(x) <- c('lower', 'median', 'upper')
+  indexes <- which(mod_data$validationtype == validationName)
+  x$anc <- mod_data$aa_new[indexes]
+  x$Dose <- mod_data$dose_new[indexes]
+  x$Virus <- mod_data$Virus_new[indexes]
+  x$Virus <- ifelse(x$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
+  x$site = mod_data$location[indexes]
+  x$year = mod_data$year[indexes]
+  x$temp = mod_data$temp_new[indexes]
+  x$lat = mod_data$lat[indexes]
+  x$lon = mod_data$lon[indexes]
+  return(x)  
+}
+
+ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
+  # get data
+  x <- concatAncestrySamples(validationName = validationName, genQuantName = genQuantName, percentiles = 95)
+  # plot labels
+  if(genQuantName == 'pMI_ancestry_new'){
+    yLabel = 'Pr(Infection)'
+  } else {
+    yLabel = 'R0'
+  }
+  # plot
+  ggplot(x, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
+    geom_line() +
+    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
+    facet_wrap(~Virus) +
+    theme_classic() +
+    xlab('aa ancestry') +
+    ylab(yLabel)
+  
+}
+
+plotWithUncertainty <- function(df, xval, yval){
+  xupper <- gsub('_median', '_upper', xval)
+  xlower <- gsub('_median', '_lower', xval)
+  yupper <- gsub('_median', '_upper', yval)
+  ylower <- gsub('_median', '_lower', yval)
+  df$site <- ifelse(df[,xval] > 1 & df[,yval] > 1, df$site, '')
+  
+  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
+    geom_errorbarh(aes_string(xmax = df[,xupper], xmin = df[,xlower]), col = 'darkgrey') +
+    geom_errorbar(aes_string(ymax = df[,yupper], ymin = df[,ylower]), col = 'darkgrey') +
+    geom_point(size = 2, color = 'black') +
+    theme_bw() +
+    theme(text = element_text(size = 14)) +
+    ylim(0,6) +
+    xlim(0,6) +
+    geom_hline(yintercept = 1,linetype=2) +
+    geom_vline(xintercept = 1,linetype=2) +
+    xlab(gsub('_|surveys|median', ' ', xval)) +
+    ylab(gsub('_|surveys|median', ' ', yval)) +
+    geom_text_repel(aes(label = site)) +
+    theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm"))
+}
+
+
+plotSurveySites <- function(virus, dose){
+  # subset
+  x <- subset(siteR0Estimates, Virus == virus & Dose == dose)
+  # plot
+  clim_vs_anc <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Ancestry_median')
+  clim_vs_full <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Full_median')
+  full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median')
+  # return grid of plots
+  plot_grid(clim_vs_anc, clim_vs_full, full_vs_anc, nrow = 1) + ggtitle(paste0(virus, ' x ', dose))
+}
+
+overlay_distributions_plot <- function(mod, param_name, type, priorValue1, priorValue2){
+  # get posterior distribution
+  df <- as.data.frame(rstan::extract(mod, param_name))
+  # plot
+  p <- ggplot(df, aes_string(param_name)) +
+    geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'yellow', alpha = 0.4) +
+    theme_classic() +
+    ggtitle(param_name) +
+    ylab('') +
+    xlab('')
+  
+  if(type == 'normal'){
+    p  + 
+      stat_function(
+        fun = dnorm, 
+        args = list(mean = priorValue1, sd = priorValue2), 
+        lwd = 2, 
+        col = 'black'
+      )
+  } else if(type == 'uniform'){
+    p  + 
+      stat_function(
+        fun = dunif, 
+        args = list(min = priorValue1, max = priorValue2), 
+        lwd = 2, 
+        col = 'black'
+      )
+  }
+}
+
 
 # trace plots ------------------------------------------------------
 # list parameters
@@ -92,47 +236,6 @@ dev.off()
 
 
 # trait fits --------------------------------------------------
-list_of_draws <- rstan::extract(r0_mod)
-
-pullSamples <- function(validationName, genQuantName, percentiles = 95){
-  indexes <- which(mod_data$validationtype == validationName)
-  samps <- list_of_draws[[genQuantName]][, indexes]
-  if(percentiles == 50){
-    sampQuantiles <- colQuantiles(samps, na.rm = T, probs = c(0.25, 0.50, 0.75))
-  } else {
-    sampQuantiles <- colQuantiles(samps, na.rm = T, probs = c(0.025, 0.50, 0.975))
-  }
-  sampQuantiles <- ifelse(sampQuantiles < 0, 0, sampQuantiles)
-  return(sampQuantiles)
-}
-
-plotParameterSamples <- function(validationName, genQuantName, points){
-  # get samples
-  x <- pullSamples(validationName = validationName, genQuantName = genQuantName)
-  # get data
-  indexes <- which(mod_data$validationtype == validationName)
-  if(grepl('climate', genQuantName) == TRUE){
-    xvals <- mod_data$temp_new[indexes]
-    xLabel <- expression(paste("Temperature (",degree,"C)"))
-    pointDataXColName <- gsub('_new', '_temp', genQuantName)
-  } else if(grepl('ancestry', genQuantName) == TRUE){
-    xvals <- mod_data$aa_new[indexes]
-    xLabel <- 'Proportion Ae. aegypti ancestry'
-    pointDataXColName <- gsub('_new', '_aa', genQuantName)
-  }
-  pointDataYColName <- gsub('_new', '', genQuantName)
-  # set plotting conditions
-  yMax = max(x[,3])
-  # plot
-  plot(xvals, x[,2], type = 'l', lwd = 2, ylab = genQuantName, xlab = xLabel, ylim = c(0, yMax), main = genQuantName)
-  lines(xvals, x[,1], lty=2, col='red', ylim=c(0,yMax))
-  lines(xvals, x[,3], lty=2, col='red', ylim=c(0,yMax))
-  # add points
-  if(points == TRUE){
-    points(mod_data[[pointDataXColName]], mod_data[[pointDataYColName]], pch=16, ylim=c(0,yMax))
-  }
-}
-
 pdf('figures/R0_Zika_trait_fit_plots.pdf', width = 11, height = 8.5)
 par(mfrow = c(2, 3)) 
 plotParameterSamples(validationName = 'temperature', genQuantName = 'alpha_climate_new', points = T)
@@ -144,45 +247,6 @@ plotParameterSamples(validationName = 'ancestry', genQuantName = 'omega_ancestry
 dev.off()
 
 # pMI ancestry modeled across strains and doses ---
-
-concatAncestrySamples <- function(validationName, genQuantName, percentiles){
-  # get data
-  x <- pullSamples(validationName = validationName, genQuantName = genQuantName, percentiles)
-  x <- as.data.frame(x)
-  colnames(x) <- c('lower', 'median', 'upper')
-  indexes <- which(mod_data$validationtype == validationName)
-  x$anc <- mod_data$aa_new[indexes]
-  x$Dose <- mod_data$dose_new[indexes]
-  x$Virus <- mod_data$Virus_new[indexes]
-  x$Virus <- ifelse(x$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
-  x$site = mod_data$location[indexes]
-  x$year = mod_data$year[indexes]
-  x$temp = mod_data$temp_new[indexes]
-  x$lat = mod_data$lat[indexes]
-  x$lon = mod_data$lon[indexes]
-  return(x)  
-}
-
-ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
-  # get data
-  x <- concatAncestrySamples(validationName = validationName, genQuantName = genQuantName, percentiles = 95)
-  # plot labels
-  if(genQuantName == 'pMI_ancestry_new'){
-    yLabel = 'Pr(Infection)'
-  } else {
-    yLabel = 'R0'
-  }
-  # plot
-  ggplot(x, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
-    geom_line() +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
-    facet_wrap(~Virus) +
-    theme_classic() +
-    xlab('aa ancestry') +
-    ylab(yLabel)
-  
-}
-
 ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'pMI_ancestry_new')
 ggsave('figures/pMI_ancestry_model.pdf')  
 
@@ -206,41 +270,6 @@ surveys_r0_full <- concatAncestrySamples(validationName = 'surveys', genQuantNam
 colnames(surveys_r0_full)[1:3] <- paste0('Full_', colnames(surveys_r0_full)[1:3])
 
 siteR0Estimates <- surveys_r0_ancestry %>% left_join(surveys_r0_climate) %>% left_join(surveys_r0_full)
-
-plotWithUncertainty <- function(df, xval, yval){
-  xupper <- gsub('_median', '_upper', xval)
-  xlower <- gsub('_median', '_lower', xval)
-  yupper <- gsub('_median', '_upper', yval)
-  ylower <- gsub('_median', '_lower', yval)
-  df$site <- ifelse(df[,xval] > 1 & df[,yval] > 1, df$site, '')
-  
-  ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
-    geom_errorbarh(aes_string(xmax = df[,xupper], xmin = df[,xlower]), col = 'darkgrey') +
-    geom_errorbar(aes_string(ymax = df[,yupper], ymin = df[,ylower]), col = 'darkgrey') +
-    geom_point(size = 2, color = 'black') +
-    theme_bw() +
-    theme(text = element_text(size = 14)) +
-    ylim(0,6) +
-    xlim(0,6) +
-    geom_hline(yintercept = 1,linetype=2) +
-    geom_vline(xintercept = 1,linetype=2) +
-    xlab(gsub('_|surveys|median', ' ', xval)) +
-    ylab(gsub('_|surveys|median', ' ', yval)) +
-    geom_text_repel(aes(label = site)) +
-    theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm"))
-}
-
-
-plotSurveySites <- function(virus, dose){
-  # subset
-  x <- subset(siteR0Estimates, Virus == virus & Dose == dose)
-  # plot
-  clim_vs_anc <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Ancestry_median')
-  clim_vs_full <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Full_median')
-  full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median')
-  # return grid of plots
-  plot_grid(clim_vs_anc, clim_vs_full, full_vs_anc, nrow = 1) + ggtitle(paste0(virus, ' x ', dose))
-}
 
 camLow <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 1275000)
 ggsave('figures/R0_scatterplot_cambodia_low_dose.pdf.pdf', camLow, width = 12, height = 4)
@@ -271,164 +300,89 @@ ggsave('figures/R0_scatterplots_all_strains_and_doses.pdf', virusxdose, width = 
 # big cities through time ------------------------------------
 bc <- concatAncestrySamples(validationName = 'big_cities', genQuantName = 'R0_full_new', percentiles = 95)
 
-# OPTION 1: time series
-ts <- ggplot(bc, aes(x = year, y = median, group = site)) + 
-  geom_line(col = 'grey') + 
-  theme_bw() +
-  geom_hline(yintercept = 1, linetype = 2) +
-  ylab('R0') +
-  xlab('Year') +
-  ggtitle('R0 through time')
-
-ggsave('figures/big_cities_option1_timeseries.pdf', ts, width = 11, height = 8.5)
-  
-# OPTION 2: scatterplots, compare 2010 with 2100
-bcScatter <- bc %>%
-  filter(year == 2010 | year == 2100)
-
-scatterComparison <- ggplot(bcScatter, aes(x = temp, y = anc, size = median)) +
-  scale_size_continuous(name = 'R0') +
-  geom_point(alpha = 0.5) +
-  theme_bw() +
-  ylab('aaa ancestry') +
-  xlab('Temperature') +
-  facet_grid(~year) +
-  ggtitle('Change in R0 from 2010 - 2100')
-
-ggsave('figures/big_cities_option2_scatter.pdf', scatterComparison, width = 11, height = 5)
-
-# OPTION 3a: lollipop chart, compare 2010 with 2100
-bcLollipop1 <- bc[,c('site', 'year', 'median')] %>%
+bc2 <- bc[,c('site', 'year', 'median', 'lat', 'lon')] %>%
   filter(year == '1970' | year == '2015' | year == '2090-2100') %>%
   spread(key = year, value = median) 
 
-colnames(bcLollipop1)[2:4] <- paste0('Year_', colnames(bcLollipop1)[2:4])
-colnames(bcLollipop1)[4] <- 'Year_2090_2100'
+colnames(bc2)[4:6] <- paste0('Year_', colnames(bc2)[4:6])
+colnames(bc2)[6] <- 'Year_2090_2100'
 
 # add ordered factor
-bcLollipop1$Suitability <- ifelse(bcLollipop1$Year_2090_2100 > 1, 1, 0)
-bcLollipop1$Suitability <- ifelse(bcLollipop1$Year_2015 > 1, 2, bcLollipop1$Suitability)
-bcLollipop1$Suitability <- ifelse(bcLollipop1$Year_1970 > 1, 3, bcLollipop1$Suitability)
+bc2$Suitability <- ifelse(bc2$Year_2090_2100 > 1, 1, 0)
+bc2$Suitability <- ifelse(bc2$Year_2015 > 1, 2, bc2$Suitability)
+bc2$Suitability <- ifelse(bc2$Year_1970 > 1, 3, bc2$Suitability)
 
-bcLollipop1 <- bcLollipop1[order(bcLollipop1$Suitability, bcLollipop1$Year_2090_2100),]
-bcLollipop1$rank <- seq(1, nrow(bcLollipop1), 1)
+bc2 <- bc2[order(bc2$Suitability, bc2$Year_2090_2100),]
+bc2$rank <- seq(1, nrow(bc2), 1)
 
-bcLollipop1$site <- fct_reorder(bcLollipop1$site, bcLollipop1$rank)
-bcLollipop1$Suitability <- as.factor(bcLollipop1$Suitability)
+bc2$site <- fct_reorder(bc2$site, bc2$rank)
+bc2$Suitability <- as.factor(bc2$Suitability)
 
-lollipop1 <- ggplot(bcLollipop1) +
-  geom_segment(aes(x = Year_1970, xend = Year_2015, y = site, yend = site, color = Suitability)) +
-  geom_segment(aes(x = Year_2015, xend = Year_2090_2100, y = site, yend = site, color = Suitability)) +
-  geom_point(aes(x = Year_1970, y = site, color = Suitability), pch = 15, size = 2) +
-  geom_point(aes(x = Year_2015, y = site, color = Suitability), pch = 2, size = 2) +
-  geom_point(aes(x = Year_2090_2100, y = site, color = Suitability), pch = 16, size = 2) +
+# Map
+source('../google_api_key.R')
+
+bc2$R0_max = rowSums(bc2[,c('Year_1970', 'Year_2015', 'Year_2090_2100')])
+
+world <- ne_countries(scale='medium', returnclass = 'sf')
+
+africa <- world %>% 
+  filter(continent == "Africa")
+
+africaMap <- ggplot(data = africa) +
+  geom_sf(fill = 'grey95') +
+  coord_sf(xlim = c(-20, 55), ylim = c(-35, 35)) +
+  geom_point(data = bc2, mapping = aes(x = lon, y = lat, color = Suitability, size = R0_max)) +
+  xlab('') +
+  ylab('') +
+  scale_color_manual(
+    values = c('maroon', 'navyblue', 'orange', 'darkgreen'),
+    labels = c('Never', 'Future', 'Present', 'Past'),
+    guide = guide_legend(reverse = TRUE, override.aes=list(lwd = 1.3))
+  ) + 
+  # theme(legend.position = c(.15, .3), legend.background = element_rect(fill='transparent')) +
+  theme(legend.position = 'bottom', legend.direction = 'vertical', legend.key = element_rect(fill = "transparent")) +
+  scale_size_continuous(name = expression(paste('Maximum ', R[0]))) +
+  ### May want to change title regarding city pops
+  labs(title = expression(paste('Maximum ', R[0],' between 1970 & 2100')),
+       subtitle = 'Color indicates whether conditions were suitable for Zika transmission \nin the past (1970), present (2015), or future (2090-2100)') +
+  scale_y_discrete(position = "right")
+
+ggsave('figures/Africa_R0_map.pdf', africaMap, width = 7, height = 7)
+
+# lollipop plot
+bc3 <- bc %>%
+  left_join(bc2[,c('site', 'Suitability', 'rank')])
+
+bc3$site <- gsub('Democratic Republic of the Congo', 'DRC', bc3$site)
+bc3$site <- fct_reorder(bc3$site, bc3$rank)
+
+lollipopPlot <-ggplot(bc3, aes(x = median, y = site, pch = as.factor(year), group = site, color = Suitability)) +
+  geom_point(size = 2) +
+  geom_line() +
   theme_bw() +
   xlab(expression('R'[0])) +
   ylab('') +
   geom_vline(xintercept = 1, linetype = 2) +
-  ggtitle(expression(paste('Change in ', R[0],' (1970 - 2015 - 2100)'))) +
+  ggtitle(expression(paste('Change in ', R[0],' through time'))) +
+  theme(legend.position = c(.7, .2), legend.background = element_rect(fill='transparent')) + 
   scale_color_manual(
     values = c('maroon', 'navyblue', 'orange', 'darkgreen'),
     labels = c('Never', 'Future', 'Present', 'Past'),
     guide = guide_legend(reverse = TRUE, override.aes=list(linetype = 1, shape = NA, lwd = 1.3))
-    ) 
+  ) +
+  scale_shape_manual(name = 'Year', 
+                     values = c('1970' = 15, '2015' = 2, '2090-2100' = 16)
+  )
 
-# lollipop1 + annotate(geom = "text", x = 4, y = 10, label = "subaru", hjust = "left")
+ggsave('figures/big_cities_lollipop_1970-2100.pdf', lollipopPlot, width = 11, height = 11)
 
-ggsave('figures/big_cities_lollipop_1970-2100.pdf', lollipop1, width = 11, height = 11)
+# combine
+bigCities <- plot_grid(lollipopPlot, africaMap, ncol = 2)
 
-# map: https://bhaskarvk.github.io/user2017.geodataviz/notebooks/02-Static-Maps.nb.html
-
-# OPTION 3b: lollipop chart, decade in which R0 crosses 0
-bcLollipop2 <- bc %>%
-  filter(median >= 1) %>%
-  group_by(site) %>%
-  arrange(median) %>%
-  slice_head(n = 1)
-
-
-lollipop2 <- ggplot(bcLollipop2, aes(x = site, y = year)) +
-  geom_segment(aes(x = site, xend = site, y = 2010, yend = year)) +
-  geom_point(aes(y = year)) +
-  coord_flip() +
-  theme_bw() +
-  xlab('') +
-  ylab('Year') +
-  ggtitle('Decade in which R0 > 1')
-
-ggsave('figures/big_cities_option3b_lollipop.pdf', lollipop2, width = 11, height = 6)
-
-# OPTION 4: radar plot
-library(fmsb)
-
-bcRadar <- bc[,c('median', 'site', 'year')] %>%
-  spread(key = year, value = median)
-rownames(bcRadar) <- bcRadar$site
-bcRadar$site <- NULL
-
-r0Max = 4
-max_min <- data.frame(
-  '2010' = c(r0Max, 0)
-  , '2020' = c(r0Max, 0)
-  , '2030' = c(r0Max, 0)
-  , '2040' = c(r0Max, 0)
-  , '2050' = c(r0Max, 0)
-  , '2060' = c(r0Max, 0)
-  , '2070' = c(r0Max, 0)
-  , '2080' = c(r0Max, 0)
-  , '2090' = c(r0Max, 0)
-  , '2100' = c(r0Max, 0)
-)
-
-colnames(max_min) <- gsub('X', '', colnames(max_min))
-rownames(max_min) <- c('Max', 'Min')
-
-bcRadar <- rbind(max_min, bcRadar)
-
-pdf('figures/big_cities_option4_radar_plot.pdf', width = 8, height = 8)
-radarChart <- radarchart(bcRadar
-                         , axistype = 1
-                         , cglcol="grey"
-                         , cglty=1
-                         , axislabcol="grey"
-                         , caxislabels=seq(0,4,0.5)
-                         , cglwd=0.8
-                         , title = 'R0 through time')  
-dev.off()
+# save
+ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 11)
 
 # prior vs posterior plots -----------------------------------
-
-# function to overlay histogram and normal density
-overlay_distributions_plot <- function(mod, param_name, type, priorValue1, priorValue2){
-  # get posterior distribution
-  df <- as.data.frame(rstan::extract(mod, param_name))
-  # plot
-  p <- ggplot(df, aes_string(param_name)) +
-    geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'yellow', alpha = 0.4) +
-    theme_classic() +
-    ggtitle(param_name) +
-    ylab('') +
-    xlab('')
-  
-  if(type == 'normal'){
-    p  + 
-      stat_function(
-        fun = dnorm, 
-        args = list(mean = priorValue1, sd = priorValue2), 
-        lwd = 2, 
-        col = 'black'
-      )
-  } else if(type == 'uniform'){
-    p  + 
-      stat_function(
-        fun = dunif, 
-        args = list(min = priorValue1, max = priorValue2), 
-        lwd = 2, 
-        col = 'black'
-      )
-  }
-}
-
 a_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_constant', type = 'normal', priorValue1 = 2.02E-04, priorValue2 = 0.01)
 a_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmin', type = 'normal', priorValue1 =  13.35, priorValue2 = 20)
 a_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmax', type = 'normal', priorValue1 = 40.08, priorValue2 = 20)
