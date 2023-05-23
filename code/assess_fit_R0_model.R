@@ -321,7 +321,7 @@ bc2$Suitability <- as.factor(bc2$Suitability)
 # Map
 source('../google_api_key.R')
 
-bc2$R0_max = rowSums(bc2[,c('Year_1970', 'Year_2015', 'Year_2090_2100')])
+bc2$R0_max = pmax(bc2$Year_1970, bc2$Year_2015, bc2$Year_2090_2100)
 
 world <- ne_countries(scale='medium', returnclass = 'sf')
 
@@ -330,13 +330,13 @@ africa <- world %>%
 
 africaMap <- ggplot(data = africa) +
   geom_sf(fill = 'grey95') +
-  coord_sf(xlim = c(-20, 55), ylim = c(-35, 35)) +
+  coord_sf(xlim = c(-20, 55), ylim = c(-40, 40)) +
   geom_point(data = bc2, mapping = aes(x = lon, y = lat, color = Suitability, size = R0_max)) +
   xlab('') +
   ylab('') +
   scale_color_manual(
-    values = c('maroon', 'navyblue', 'orange', 'darkgreen'),
-    labels = c('Never', 'Future', 'Present', 'Past'),
+    values = c('navyblue', 'darkgreen', 'orange', 'maroon'),
+    labels = c('Not imminent', 'Future', 'Present', 'Past'),
     guide = guide_legend(reverse = TRUE, override.aes=list(lwd = 1.3))
   ) + 
   # theme(legend.position = c(.15, .3), legend.background = element_rect(fill='transparent')) +
@@ -366,8 +366,8 @@ lollipopPlot <-ggplot(bc3, aes(x = median, y = site, pch = as.factor(year), grou
   ggtitle(expression(paste('Change in ', R[0],' through time'))) +
   theme(legend.position = c(.7, .2), legend.background = element_rect(fill='transparent')) + 
   scale_color_manual(
-    values = c('maroon', 'navyblue', 'orange', 'darkgreen'),
-    labels = c('Never', 'Future', 'Present', 'Past'),
+    values = c('navyblue', 'darkgreen', 'orange', 'maroon'),
+    labels = c('Not imminent', 'Future', 'Present', 'Past'),
     guide = guide_legend(reverse = TRUE, override.aes=list(linetype = 1, shape = NA, lwd = 1.3))
   ) +
   scale_shape_manual(name = 'Year', 

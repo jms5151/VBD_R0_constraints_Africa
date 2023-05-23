@@ -153,37 +153,63 @@ aaa_cities <- aaa_cities %>%
   as.data.frame()
 
 # load temperature data
-gfdl <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_1970_2015_2090-2100.csv')
-miroc <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_MIROC6_1970_2015_2090-2100.csv')
-NorESM2 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_NorESM2-MM_1970_2015_2090-2100.csv')
-GISS <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GISS-E2-1-G_1970_2015_2090-2100.csv')
-INM <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_INM-CM4-8_1970_2015_2090-2100.csv')
+# gfdl <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_1970_2015_2090-2100.csv')
+# miroc <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_MIROC6_1970_2015_2090-2100.csv')
+# NorESM2 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_NorESM2-MM_1970_2015_2090-2100.csv')
+# GISS <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GISS-E2-1-G_1970_2015_2090-2100.csv')
+# INM <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_INM-CM4-8_1970_2015_2090-2100.csv')
+# 
+# # combine
+# cmip <- combine(gfdl, miroc, NorESM2, GISS, INM)
+# 
+# # format temperature from kelvin to celsius
+# cmip$temp <- cmip$mean - 273.15
+# 
+# # change end of century year to group
+# cmip$year <- ifelse(cmip$year > 2080, '2090-2100', cmip$year) 
+# 
+# # average temperature year grouping
+# cmip_mean <- cmip %>%
+#   group_by(City, year) %>%
+#   summarise(temp = mean(temp)) %>%
+#   as.data.frame()
+# 
+# # fix city spelling to match aaa
+# # this is a terrible way of doing it, but it works
+# cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
+# cmip_mean$City[cmip_mean$City == 'Durbané(eThekwini)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+# cmip_mean$City[cmip_mean$City == 'East Randé(Ekurhuleni)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+# cmip_mean$City[cmip_mean$City == 'Pretoriaé(Tshwane)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
 
-# combine
-cmip <- combine(gfdl, miroc, NorESM2, GISS, INM)
+# alternative temp data
+cityNames <- read.csv('../VBD-data/african_cities_latlon.csv')
+am2t1 <- read.csv('../VBD-data/t_ref_AM2.5C360_amipHadISSTrcp45_tigercpu_intelmpi_18_1080PE_ens18_1871-2100_AfricanCities.degC.csv')
+am2t2 <- read.csv('../VBD-data/t_ref_AM2.5C360_amipHadISSTrcp45_tigercpu_intelmpi_18_1080PE_ens17_1871-2100_AfricanCities.degC.csv')
+am2t3 <- read.csv('../VBD-data/t_ref_AM2.5C360_amipHadISSTrcp45_tigercpu_intelmpi_18_1080PE_ens16_1871-2100_AfricanCities.degC.csv')
 
-# format temperature from kelvin to celsius
-cmip$temp <- cmip$mean - 273.15
+am2 <- do.call(rbind, list(am2t1, am2t2, am2t3))
 
-# change end of century year to group
-cmip$year <- ifelse(cmip$year > 2080, '2090-2100', cmip$year) 
+formatAM2data <- function(df){
+  df$year <- as.numeric(substr(df$time, 1, 4))
+  df <- df %>%
+    filter(year == 1970| year == 2015 | year >= 2090)
+  df$year[df$year >= 2090] <- '2090-2100'
+  df$time <- NULL
+  colnames(df)[1:59] <- cityNames$City
+  df <- df %>%
+    gather('City', 'temp', -year) %>%
+    group_by(City, year) %>%
+    summarise(temp = mean(temp))
+  return(df)
+}
 
-# average temperature year grouping
-cmip_mean <- cmip %>%
-  group_by(City, year) %>%
-  summarise(temp = mean(temp)) %>%
-  as.data.frame()
 
-# fix city spelling to match aaa
-# this is a terrible way of doing it, but it works
-cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
-cmip_mean$City[cmip_mean$City == 'Durbané(eThekwini)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-cmip_mean$City[cmip_mean$City == 'East Randé(Ekurhuleni)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-cmip_mean$City[cmip_mean$City == 'Pretoriaé(Tshwane)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+future_temps <- formatAM2data(df = am2)
 
 # combine ancestry and temperature data for cities
 big_cities <- aaa_cities %>% 
-  left_join(cmip_mean[,c('City', 'year', 'temp')]) %>%
+  # left_join(cmip_mean[,c('City', 'year', 'temp')]) %>%
+  left_join(future_temps) %>%
   mutate('Dose' = rep(min(zikv_new$Dose), nrow(aaa_cities))
     , 'Virus' = rep(0, nrow(aaa_cities))
     , 'Location' = paste0(City, ', ', Country)
