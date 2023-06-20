@@ -326,12 +326,12 @@ fullr0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_full_new
 # 
 # ggsave('figures/R0_boxplot_cambodia_low_dose.pdf', r0boxplot, width = 7, height = 10.5)
 
-# contour plot -----------------------------------------------------------------
+# level & contour plots -----------------------------------------------------------------
 contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
 
 coul <- viridis(100)
 
-pdf('figures/R0_contour_plot.pdf', width = 9, height = 6)
+pdf('figures/R0_level_plot.pdf', width = 9, height = 6)
 levelplot(median ~ temp * anc, 
           contour_samps, 
           cex = 1.2,
@@ -341,6 +341,27 @@ levelplot(median ~ temp * anc,
           colorkey=list(title=expression(R[0]))
           ) + 
   layer({panel.points(x = surveys_r0_full$temp, y = surveys_r0_full$anc, pch = 1, cex = 1.5, col = 'white', lwd = 2)})
+dev.off()
+
+df2 <- tidyr::spread(contour_samps[,c('temp', 'anc', 'median')], 'anc', 'median')
+df.x <- df2$temp
+df.y <- as.numeric(colnames(df2)[-1])
+df.z <- as.matrix(df2[,-1])
+
+pdf('figures/R0_contour_plot.pdf', width = 9, height = 6)
+filled.contour(df.x, df.y, df.z,
+               nlevels = 15,
+               col = viridis(15),
+               xlab = expression(paste("Temperature (",degree,"C)")),
+               ylab = 'Proportion non-African ancestry',
+               key.title = {par(cex.main = 1); title(main = expression(R[0]))},
+               plot.axes = {
+                 axis(1)
+                 axis(2)
+                 contour(df.x, df.y, df.z, add = T, col = 'white', labcex = 1.1)
+                 }
+               )
+points(x = surveys_r0_full$temp, y = surveys_r0_full$anc, pch = 1, cex = 1.5, col = 'white', lwd = 2)
 dev.off()
 
 # big cities through time ------------------------------------
