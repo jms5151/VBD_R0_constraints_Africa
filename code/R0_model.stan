@@ -65,12 +65,6 @@ parameters {
   real<lower=24, upper=45> b_climate_Tmax;                      // parameter Tmax
   real<lower=0> b_climate_sigma;                                // noise
 
-  // // pMI denv (prob mosquito infection)
-  // real<lower=0, upper=0.01> pMI_climate_constant;   // parameter c
-  // real<lower=0, upper=24> pMI_climate_Tmin;         // parameter Tmin
-  // real<lower=24, upper=45> pMI_climate_Tmax;        // parameter Tmax
-  // real<lower=0> pMI_climate_sigma;                  // noise
-  
   // pMI climate (prob mosquito infection)
   real<lower=0, upper=10> pMI_climate_rmax;                     // parameter rmax
   real<lower=10, upper=40> pMI_climate_Topt;                    // parameter Topt
@@ -139,20 +133,6 @@ model {                                                         // Fit models to
     target += positive_infinity();
   }
 
-  // // pMI denv (prob mosquito infection)
-  // pMI_climate_constant ~ normal(4.91E-04,0.01);     // prior for c
-  // pMI_climate_Tmin ~ normal(12.22,20);              // prior for Tmin
-  // pMI_climate_Tmax ~ normal(37.46,20);              // prior for Tmax
-  // pMI_climate_sigma ~ uniform(0,100);               // prior for sigma
-  // 
-  // for(k in 1:pMI_climate_N){                        // Briere model
-  //   real pMI_climate_mu = pMI_climate_constant * pMI_climate_temp[k] * (pMI_climate_temp[k] - pMI_climate_Tmin) * sqrt(pMI_climate_Tmax - pMI_climate_temp[k]);
-  //   pMI_climate[k] ~ normal(pMI_climate_mu, pMI_climate_sigma);
-  // }
-  // if (pMI_climate_Tmin > pMI_climate_Tmax) {
-  //   target += positive_infinity();
-  // }
-  
   // pMI climate (prob mosquito infection)
   pMI_climate_rmax ~ normal(0.24, 0.03);                        // prior for rmax
   pMI_climate_Topt ~ normal(30.08, 0.38);                       // prior for Topt
@@ -256,12 +236,6 @@ generated quantities {
     b_climate_ppc[q] = normal_rng(b_climate_mu_ppc, b_climate_sigma);
   }
 
-  // // ppc pMI denv (prob mosquito infection)
-  // for (r in 1:pMI_climate_N){
-  //   real pMI_climate_mu_ppc = pMI_climate_constant * pMI_climate_temp[r] * (pMI_climate_temp[r] - pMI_climate_Tmin) * sqrt(pMI_climate_Tmax - pMI_climate_temp[r]);
-  //   pMI_climate_ppc[r] = normal_rng(pMI_climate_mu_ppc, pMI_climate_sigma);
-  // }
-  
  // ppc pMI climate (prob mosquito infection)
   for (r in 1:pMI_climate_N){
     real pMI_climate_mu_ppc = pMI_climate_rmax * exp(-0.5 * (fabs(pMI_climate_temp[r] - pMI_climate_Topt)/pMI_climate_a)^2);;
@@ -308,14 +282,6 @@ generated quantities {
       b_climate_new[zz] = 0;
     }
 
-    // // pMI denv (prob mosquito infection)
-    // if(pMI_climate_Tmin < temp_new[zz] && pMI_climate_Tmax > temp_new[zz]){
-    //   pMI_climate_new[zz] = normal_rng((pMI_climate_constant * temp_new[zz] * (temp_new[zz] - pMI_climate_Tmin) * sqrt(pMI_climate_Tmax - temp_new[zz])), pMI_climate_sigma);
-    // }
-    // else {
-    //   pMI_climate_new[zz] = 0;
-    // }
-
     // pMI (prob mosquito infection)
     pMI_climate_new[zz] = normal_rng(pMI_climate_rmax * exp(-0.5 * (fabs(temp_new[zz] - pMI_climate_Topt)/pMI_climate_a)^2), pMI_climate_sigma);
 
@@ -348,8 +314,6 @@ generated quantities {
     b_new[zz] = normal_rng(0.77, 0.05);
     EIR_new[zz] = normal_rng(0.15, 0.05);
     lf_new[zz] = normal_rng(24.36, 2);
-    // pMI_new_constant[zz] = normal_rng(0.69, 0.05);
-
 
     // R0 climate
     R0_climate_new[zz] = sqrt((alpha_climate_new[zz] * b_climate_new[zz] *

@@ -107,35 +107,36 @@ survey_new <- survey_new %>%
 colnames(survey_new)[4:5] <- c('anc', 'temp')
 survey_new <- survey_new[, colnames(temp_df)]
 
-# map data ---
-# map_data <- read.csv('../VBD-data/map_variables.csv')
-# colnames(map_data) <- c('lon', 'lat', 'anc', 'temp')
-# 
-# map_data <- map_data %>%
-#   mutate(
-#     'Dose' = rep(min(zikv_new$Dose), nrow(map_data))
-#     , 'Virus'= rep(0, nrow(map_data))
-#     , 'validation_type' = 'map'
-#     , 'Location' = NA
-#   )
-#   
-# map_data <- map_data[, colnames(temp_df)]
-
-# new_data <- new_data[1:1500, ]
-
 # African cities time series data ---
 # load & format aaa data
-aaa_cities <- read.csv('../VBD-data/african_cities_1970_2100.csv')
-aaa_cities2 <- read.csv('../VBD-data/african_cities_1970_2015.csv')
+# aaa_cities <- read.csv('../VBD-data/african_cities_1970_2100.csv')
+# aaa_cities2 <- read.csv('../VBD-data/african_cities_1970_2015.csv')
+
+aaa_cities <- read.csv('../VBD-data/african_cities_1970_SSP585_1970_2020_and_2090-2100.csv')
+cityNames <- read.csv('../VBD-data/african_cities_latlon.csv')
+
+# format names
+aaa_cities$City <- cityNames$City
+aaa_cities$Country <- cityNames$Country
+
+# get multimodel mean aaa for 2100
+aaa_cities$aaa2100 <- rowMeans(aaa_cities[,c('aaa2100_INM.CM4.8'
+                                             , 'aaa2100_INM.CM4.8'
+                                             , 'aaa2100_MIROC6'
+                                             , 'aaa2100_MPI.ESM1.2.HR'
+                                             , 'aaa2100_MRI.ESM2.0')])
 
 # combine
-aaa_cities$aaa2015 <- aaa_cities2$aaa2015
+# aaa_cities$aaa2015 <- aaa_cities2$aaa2015
 
 # remove sites from Rose et al. 2015
-aaa_cities <- aaa_cities[29:nrow(aaa_cities),]
+# aaa_cities <- aaa_cities[29:nrow(aaa_cities),]
 
 # wide to long
-aaa_cities <- aaa_cities %>% gather('Variable', 'anc', bio.bio15:aaa2015) 
+# aaa_cities <- aaa_cities %>% gather('Variable', 'anc', bio.bio15:aaa2015) 
+
+aaa_cities <- aaa_cities[, c('City', 'Country', 'Longitude', 'Latitude', 'aaa1970', 'aaa2020', 'aaa2100')]
+aaa_cities <- aaa_cities %>% gather('Variable', 'anc', aaa1970:aaa2100) 
 
 # remove variables other than IDs, ancestry, and year
 aaa_cities <- aaa_cities[str_detect(aaa_cities$Variable, '^aaa'),]
@@ -147,69 +148,44 @@ aaa_cities$year <- ifelse(aaa_cities$year > 2080, '2090-2100', aaa_cities$year)
 
 # average ancestry for end of century estimate
 aaa_cities <- aaa_cities %>%
-  filter(year == '1970' | year == '2015' | year == '2090-2100') %>%
+  filter(year == '1970' | year == '2020' | year == '2090-2100') %>%
   group_by(City, Country, Longitude, Latitude, year) %>%
   summarise(anc = mean(anc)) %>%
   as.data.frame()
 
 # load temperature data
-# gfdl <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_1970_2015_2090-2100.csv')
-# miroc <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_MIROC6_1970_2015_2090-2100.csv')
-# NorESM2 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_NorESM2-MM_1970_2015_2090-2100.csv')
-# GISS <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GISS-E2-1-G_1970_2015_2090-2100.csv')
-# INM <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_INM-CM4-8_1970_2015_2090-2100.csv')
-# 
-# # combine
-# cmip <- combine(gfdl, miroc, NorESM2, GISS, INM)
-# 
-# # format temperature from kelvin to celsius
-# cmip$temp <- cmip$mean - 273.15
-# 
-# # change end of century year to group
-# cmip$year <- ifelse(cmip$year > 2080, '2090-2100', cmip$year) 
-# 
-# # average temperature year grouping
-# cmip_mean <- cmip %>%
-#   group_by(City, year) %>%
-#   summarise(temp = mean(temp)) %>%
-#   as.data.frame()
-# 
-# # fix city spelling to match aaa
-# # this is a terrible way of doing it, but it works
-# cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
-# cmip_mean$City[cmip_mean$City == 'Durbané(eThekwini)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-# cmip_mean$City[cmip_mean$City == 'East Randé(Ekurhuleni)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-# cmip_mean$City[cmip_mean$City == 'Pretoriaé(Tshwane)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+gfdl <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GFDL-ESM4_1970_2020_2090-2100.csv')
+miroc <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_MIROC6_1970_2020_2090-2100.csv')
+NorESM2 <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_NorESM2-MM_1970_2020_2090-2100.csv')
+GISS <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_GISS-E2-1-G_1970_2020_2090-2100.csv')
+INM <- read.csv('../VBD-data/CMIP6_TAS_Timeseries_INM-CM4-8_1970_2020_2090-2100.csv')
 
-# alternative temp data
-cityNames <- read.csv('../VBD-data/african_cities_latlon.csv')
-am2t1 <- read.csv('../VBD-data/t_ref_AM2.5C360_amipHadISSTrcp45_tigercpu_intelmpi_18_1080PE_ens18_1871-2100_AfricanCities.degC.csv')
-am2t2 <- read.csv('../VBD-data/t_ref_AM2.5C360_amipHadISSTrcp45_tigercpu_intelmpi_18_1080PE_ens17_1871-2100_AfricanCities.degC.csv')
-am2t3 <- read.csv('../VBD-data/t_ref_AM2.5C360_amipHadISSTrcp45_tigercpu_intelmpi_18_1080PE_ens16_1871-2100_AfricanCities.degC.csv')
+# combine
+cmip <- combine(gfdl, miroc, NorESM2, GISS, INM)
 
-am2 <- do.call(rbind, list(am2t1, am2t2, am2t3))
+# format temperature from kelvin to celsius
+cmip$temp <- cmip$mean - 273.15
 
-formatAM2data <- function(df){
-  df$year <- as.numeric(substr(df$time, 1, 4))
-  df <- df %>%
-    filter(year == 1970| year == 2015 | year >= 2090)
-  df$year[df$year >= 2090] <- '2090-2100'
-  df$time <- NULL
-  colnames(df)[1:59] <- cityNames$City
-  df <- df %>%
-    gather('City', 'temp', -year) %>%
-    group_by(City, year) %>%
-    summarise(temp = mean(temp))
-  return(df)
-}
+# change end of century year to group
+cmip$year <- ifelse(cmip$year > 2080, '2090-2100', cmip$year)
 
+# average temperature year grouping
+cmip_mean <- cmip %>%
+  group_by(City, year) %>%
+  summarise(temp = mean(temp)) %>%
+  as.data.frame()
 
-future_temps <- formatAM2data(df = am2)
+# fix city spelling to match aaa
+# this is a terrible way of doing it, but it works
+cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
+cmip_mean$City <- gsub('_', ' ', cmip_mean$City)
+cmip_mean$City[cmip_mean$City == 'Durban(eThekwini)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+cmip_mean$City[cmip_mean$City == 'East Rand(Ekurhuleni)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
+cmip_mean$City[cmip_mean$City == 'Pretoria(Tshwane)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
 
 # combine ancestry and temperature data for cities
 big_cities <- aaa_cities %>% 
-  # left_join(cmip_mean[,c('City', 'year', 'temp')]) %>%
-  left_join(future_temps) %>%
+  left_join(cmip_mean[,c('City', 'year', 'temp')]) %>%
   mutate('Dose' = rep(min(zikv_new$Dose), nrow(aaa_cities))
     , 'Virus' = rep(0, nrow(aaa_cities))
     , 'Location' = paste0(City, ', ', Country)
@@ -220,13 +196,30 @@ big_cities <- aaa_cities %>%
 
 big_cities <- big_cities[, colnames(zikv_new)]
 
+# contour data
+temps <- seq(from = 15, to = 40, by =  1)
+aaa <- seq(from = 0, to = 1, by = 0.1)
+
+contour <- expand.grid('temp' = temps, 'anc' = aaa)
+
+contour <- contour %>%
+  mutate(
+    'Dose' = rep(min(zikv_new$Dose), nrow(contour))
+    , 'Virus' = rep(0, nrow(contour))
+    , 'Location' = rep(NA, nrow(contour))
+    , 'lon' = rep(NA, nrow(contour))
+    , 'lat' = rep(NA, nrow(contour))
+    , 'year' = rep(NA, nrow(contour))
+    , 'validation_type' = 'contour'
+  )
+
 # combine new data ---
 new_data <- do.call(rbind, list(
   zikv_new
   , temp_df
   , survey_new
-  # , map_data
   , big_cities
+  , contour
 ))
 
 # combine all data to fit and generate data with Zika model

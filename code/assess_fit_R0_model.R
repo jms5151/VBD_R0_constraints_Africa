@@ -7,6 +7,8 @@ library(ggplot2)
 library(ggrepel)
 library(cowplot)
 library(rnaturalearth)
+library(latticeExtra)
+library(viridisLite)
 
 # open model
 r0_mod <- readRDS('../models/stan_model_fit_zikv.rds')
@@ -72,6 +74,18 @@ concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   x$lat = mod_data$lat[indexes]
   x$lon = mod_data$lon[indexes]
   return(x)  
+}
+
+boxplotSamples <- function(validationName, genQuantName, dose, virus, n){
+  indexes <- which(mod_data$validationtype == validationName & mod_data$dose_new == dose & mod_data$Virus_new == virus)
+  samps <- list_of_draws[[genQuantName]][, indexes]
+  x <- as.data.frame(samps)
+  y <- sample_n(x, n)
+  colnames(y) <- mod_data$location[indexes]
+  # y2 <- as.data.frame(t(y))
+  y$type = genQuantName
+  y2 <- gather(y, key = site, value = R0, -type)
+  return(y2)
 }
 
 ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
@@ -175,10 +189,6 @@ params <- c('omega_ancestry_constant'
             , 'b_climate_Tmax'
             , 'b_climate_constant'
             , 'b_climate_sigma'
-            # , 'pMI_climate_Tmin'
-            # , 'pMI_climate_Tmax'
-            # , 'pMI_climate_constant'
-            # , 'pMI_climate_sigma'
             , 'pMI_climate_rmax'
             , 'pMI_climate_Topt'
             , 'pMI_climate_a'
@@ -297,11 +307,47 @@ virusxdose <- plot_grid(camMid
 
 ggsave('figures/R0_scatterplots_all_strains_and_doses.pdf', virusxdose, width = 8.5, height = 11)
 
+
+# boxplot SI? --------------------
+ancestryr0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_ancestry_new', n = 500, dose = 1275000, virus = 0)
+climater0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_climate_new', n = 500, dose = 1275000, virus = 0)
+fullr0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_full_new', n = 500, dose = 1275000, virus = 0)
+
+# r0boxes <- do.call(rbind, list(ancestryr0, climater0, fullr0))
+# 
+# r0boxes$site <- fct_reorder(r0boxes$site, r0boxes$R0)
+# 
+# r0boxplot <- ggplot(r0boxes, aes(x=R0, y=site, fill=type)) + 
+#   geom_boxplot(outlier.shape = NA) +
+#   theme_bw() +
+#   geom_vline(xintercept = 1, linetype = 2) +
+#   xlim(0,6) +
+#   ylab('')
+# 
+# ggsave('figures/R0_boxplot_cambodia_low_dose.pdf', r0boxplot, width = 7, height = 10.5)
+
+# contour plot -----------------------------------------------------------------
+contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
+
+coul <- viridis(100)
+
+pdf('figures/R0_contour_plot.pdf', width = 9, height = 6)
+levelplot(median ~ temp * anc, 
+          contour_samps, 
+          cex = 1.2,
+          col.regions = coul,
+          xlab = expression(paste("Temperature (",degree,"C)")),
+          ylab = 'Proportion non-African ancestry',
+          colorkey=list(title=expression(R[0]))
+          ) + 
+  layer({panel.points(x = surveys_r0_full$temp, y = surveys_r0_full$anc, pch = 1, cex = 1.5, col = 'white', lwd = 2)})
+dev.off()
+
 # big cities through time ------------------------------------
 bc <- concatAncestrySamples(validationName = 'big_cities', genQuantName = 'R0_full_new', percentiles = 95)
 
 bc2 <- bc[,c('site', 'year', 'median', 'lat', 'lon')] %>%
-  filter(year == '1970' | year == '2015' | year == '2090-2100') %>%
+  filter(year == '1970' | year == '2020' | year == '2090-2100') %>%
   spread(key = year, value = median) 
 
 colnames(bc2)[4:6] <- paste0('Year_', colnames(bc2)[4:6])
@@ -309,7 +355,7 @@ colnames(bc2)[6] <- 'Year_2090_2100'
 
 # add ordered factor
 bc2$Suitability <- ifelse(bc2$Year_2090_2100 > 1, 1, 0)
-bc2$Suitability <- ifelse(bc2$Year_2015 > 1, 2, bc2$Suitability)
+bc2$Suitability <- ifelse(bc2$Year_2020 > 1, 2, bc2$Suitability)
 bc2$Suitability <- ifelse(bc2$Year_1970 > 1, 3, bc2$Suitability)
 
 bc2 <- bc2[order(bc2$Suitability, bc2$Year_2090_2100),]
@@ -321,7 +367,7 @@ bc2$Suitability <- as.factor(bc2$Suitability)
 # Map
 source('../google_api_key.R')
 
-bc2$R0_max = pmax(bc2$Year_1970, bc2$Year_2015, bc2$Year_2090_2100)
+bc2$R0_max = pmax(bc2$Year_1970, bc2$Year_2020, bc2$Year_2090_2100)
 
 world <- ne_countries(scale='medium', returnclass = 'sf')
 
@@ -341,10 +387,10 @@ africaMap <- ggplot(data = africa) +
   ) + 
   # theme(legend.position = c(.15, .3), legend.background = element_rect(fill='transparent')) +
   theme(legend.position = 'bottom', legend.direction = 'vertical', legend.key = element_rect(fill = "transparent")) +
-  scale_size_continuous(name = expression(paste('Maximum ', R[0]))) +
+  scale_size_continuous(name = expression(paste('Maximum ', R[0])), breaks = seq(0,3,0.5)) +
   ### May want to change title regarding city pops
   labs(title = expression(paste('Maximum ', R[0],' between 1970 & 2100')),
-       subtitle = 'Color indicates whether conditions were suitable for Zika transmission \nin the past (1970), present (2015), or future (2090-2100)') +
+       subtitle = 'Color indicates whether conditions were suitable for Zika transmission \nin the past (1970), present (2020), or future (2090-2100)') +
   scale_y_discrete(position = "right")
 
 ggsave('figures/Africa_R0_map.pdf', africaMap, width = 7, height = 7)
@@ -371,7 +417,7 @@ lollipopPlot <-ggplot(bc3, aes(x = median, y = site, pch = as.factor(year), grou
     guide = guide_legend(reverse = TRUE, override.aes=list(linetype = 1, shape = NA, lwd = 1.3))
   ) +
   scale_shape_manual(name = 'Year', 
-                     values = c('1970' = 15, '2015' = 2, '2090-2100' = 16)
+                     values = c('1970' = 15, '2020' = 2, '2090-2100' = 16)
   )
 
 ggsave('figures/big_cities_lollipop_1970-2100.pdf', lollipopPlot, width = 11, height = 11)
@@ -391,9 +437,6 @@ b_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate
 b_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmin', type = 'normal', priorValue1 = 17.05, priorValue2 = 20)
 b_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmax', type = 'normal', priorValue1 = 35.83, priorValue2 = 20)
 b_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
-# pMI_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_constant', type = 'normal', priorValue1 = 4.91E-04, priorValue2 = 0.01)
-# pMI_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Tmin', type = 'normal', priorValue1 = 12.22, priorValue2 = 20)
-# pMI_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Tmax', type = 'normal', priorValue1 = 37.46, priorValue2 = 20)
 pMI_clim_rmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_rmax', type = 'normal', priorValue1 = 0.24, priorValue2 = 0.03)
 pMI_clim_Topt <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Topt', type = 'normal', priorValue1 = 30.08, priorValue2 = 0.38)
 pMI_clim_a <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_a', type = 'normal', priorValue1 = 3.60, priorValue2 = 0.41)
@@ -415,9 +458,6 @@ p <- plot_grid(a_clim_const
           , b_clim_Tmin
           , b_clim_Tmax
           , b_clim_sig
-          # , pMI_clim_const
-          # , pMI_clim_Tmin
-          # , pMI_clim_Tmax
           , pMI_clim_rmax
           , pMI_clim_Topt
           , pMI_clim_a
@@ -432,53 +472,3 @@ p <- plot_grid(a_clim_const
           , lf_clim_sig
           )
 ggsave('figures/prior_vs_posterior_plots.pdf', p, width = 11, height = 11)
-
-
-# plot survey points R0 values
-
-
-
-
-# Compare parameter outputs with Mordecai PLoS NTD ----------------
-list_of_draws <- rstan::extract(r0_mod)
-
-# temperature at which R0 is optimized
-r0Samples <- data.frame(list_of_draws['R0'])
-r0Means<-colMeans(r0Samples, na.rm = T)
-mod_data$climate_temp_new[which(r0Means == max(r0Means))]
-
-param_names <- names(list_of_draws)[grepl('constant|min|max', names(list_of_draws))==T]
-param_means <- as.data.frame(lapply(list_of_draws[param_names], mean, na.rm = T))
-param_quant <- lapply(list_of_draws[param_names], quantile, c(0.025, 0.975), na.rm = T)
-param_quant <- as.data.frame(param_quant)
-
-param_vals <- rbind(param_means, param_quant) 
-param_vals$type <- row.names(param_vals)
-param_vals <- param_vals %>% 
-  gather('parameter', 'value', -type) %>%
-  separate(parameter, c('trait', 'toremove', 'parameter')) %>%
-  spread(type, value) %>%
-  select(-toremove) %>%
-  mutate(study = 'This study')
-colnames(param_vals)[3:5] <- c('mean', 'lower', 'upper')
-
-# combine with Mordecai
-mordecai <- read.csv('../VBD-Data/trait_data/table_b_trait_values.csv')
-
-param_vals2 <- rbind(param_vals, mordecai)
-param_vals2[,c('trait', 'parameter')] <- lapply(param_vals2[,c('trait', 'parameter')], as.factor)
-
-dodge <- position_dodge(width=0.2) 
-
-pdf('figures/R0_trait_fit_compare_with_Mordecai_etal.pdf', width = 11, height = 6)
-ggplot(param_vals2, aes(x = mean, y = parameter, color = study)) +
-  geom_point(size = 2, position = dodge) +
-  geom_errorbar(aes(xmin = lower, xmax = upper), width=.05, position = dodge) +
-  theme_bw() +
-  facet_wrap(.~trait, ncol = 5) +
-  coord_fixed(ratio = 60) +
-  xlab('') +
-  ylab('') +
-  theme(legend.title = element_blank(), legend.position = 'top') +
-  scale_colour_manual(values = c('darkblue','orange'))
-dev.off()
