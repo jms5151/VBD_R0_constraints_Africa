@@ -15,8 +15,8 @@ stan_model_fit_zikv <-
   sampling(
     stan_model('code/R0_model.stan')
   , data = model_data_zikv
-  , iter = 10000
-  # , cores = parallel::detectCores()-1
+  , iter = 15000
+  , cores = parallel::detectCores()-1
   , chains = 3
   )
 

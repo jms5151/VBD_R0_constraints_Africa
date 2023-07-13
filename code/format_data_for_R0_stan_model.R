@@ -76,7 +76,7 @@ zikv_new <- zikv_new %>%
 zikv_new <- cbind('temp' = rep(29, nrow(zikv_new)), zikv_new)
 
 # temperature ---
-temp_new  <- seq(10,40,0.1)
+temp_new  <- seq(10,40,0.5)
 
 temp_df <- data.frame(
   'temp' = temp_new

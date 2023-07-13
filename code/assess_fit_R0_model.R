@@ -4,6 +4,8 @@ library(boot)
 library(matrixStats)
 library(tidyverse)
 library(ggplot2)
+library(gridExtra)
+library(egg)
 library(ggrepel)
 library(cowplot)
 library(rnaturalearth)
@@ -49,7 +51,8 @@ plotParameterSamples <- function(validationName, genQuantName, points){
   # set plotting conditions
   yMax = max(x[,3])
   # plot
-  plot(xvals, x[,2], type = 'l', lwd = 2, ylab = genQuantName, xlab = xLabel, ylim = c(0, yMax), main = genQuantName)
+  titleName <- gsub('_.*', '', genQuantName)
+  plot(xvals, x[,2], type = 'l', lwd = 2, ylab = '', xlab = xLabel, ylim = c(0, yMax), main = titleName, las = 2)
   lines(xvals, x[,1], lty=2, col='red', ylim=c(0,yMax))
   lines(xvals, x[,3], lty=2, col='red', ylim=c(0,yMax))
   # add points
@@ -76,18 +79,6 @@ concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   return(x)  
 }
 
-boxplotSamples <- function(validationName, genQuantName, dose, virus, n){
-  indexes <- which(mod_data$validationtype == validationName & mod_data$dose_new == dose & mod_data$Virus_new == virus)
-  samps <- list_of_draws[[genQuantName]][, indexes]
-  x <- as.data.frame(samps)
-  y <- sample_n(x, n)
-  colnames(y) <- mod_data$location[indexes]
-  # y2 <- as.data.frame(t(y))
-  y$type = genQuantName
-  y2 <- gather(y, key = site, value = R0, -type)
-  return(y2)
-}
-
 ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
   # get data
   x <- concatAncestrySamples(validationName = validationName, genQuantName = genQuantName, percentiles = 95)
@@ -95,7 +86,7 @@ ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
   if(genQuantName == 'pMI_ancestry_new'){
     yLabel = 'Pr(Infection)'
   } else {
-    yLabel = 'R0'
+    yLabel = expression(R[0])
   }
   # plot
   ggplot(x, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
@@ -103,7 +94,7 @@ ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
     geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
     facet_wrap(~Virus) +
     theme_classic() +
-    xlab('aa ancestry') +
+    xlab('Proportion non-African ancestry') +
     ylab(yLabel)
   
 }
@@ -125,8 +116,8 @@ plotWithUncertainty <- function(df, xval, yval){
     xlim(0,6) +
     geom_hline(yintercept = 1,linetype=2) +
     geom_vline(xintercept = 1,linetype=2) +
-    xlab(gsub('_|surveys|median', ' ', xval)) +
-    ylab(gsub('_|surveys|median', ' ', yval)) +
+    xlab(expression(paste('Full model ', R[0]))) +
+    ylab('') +
     geom_text_repel(aes(label = site)) +
     theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm"))
 }
@@ -136,21 +127,21 @@ plotSurveySites <- function(virus, dose){
   # subset
   x <- subset(siteR0Estimates, Virus == virus & Dose == dose)
   # plot
-  clim_vs_anc <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Ancestry_median')
-  clim_vs_full <- plotWithUncertainty(df = x, xval = 'Climate_median', yval = 'Full_median')
-  full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median')
+  clim_vs_full <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Climate_median') + ylab(expression(paste('Climate model  ', R[0])))
+  full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median') + ylab(expression(paste('Ancestry model  ', R[0])))
   # return grid of plots
-  plot_grid(clim_vs_anc, clim_vs_full, full_vs_anc, nrow = 1) + ggtitle(paste0(virus, ' x ', dose))
+  plot_grid(clim_vs_full, full_vs_anc, nrow = 1) + ggtitle(paste0(virus, ' x ', dose))
 }
 
 overlay_distributions_plot <- function(mod, param_name, type, priorValue1, priorValue2){
   # get posterior distribution
   df <- as.data.frame(rstan::extract(mod, param_name))
   # plot
+  paramTitle <- gsub('_climate_|_ancestry_', ', ', param_name)
   p <- ggplot(df, aes_string(param_name)) +
-    geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'yellow', alpha = 0.4) +
+    geom_histogram(aes(y = after_stat(density)), color = 'black', fill =  'lightblue', alpha = 0.4) +
     theme_classic() +
-    ggtitle(param_name) +
+    ggtitle(paramTitle) +
     ylab('') +
     xlab('')
   
@@ -206,9 +197,21 @@ params <- c('omega_ancestry_constant'
             , 'lf_climate_constant' 
             , 'lf_climate_sigma'
 )
-pdf('figures/R0_stan_zikv_traceplots.pdf', width = 11, height = 8.5)
-rstan::traceplot(r0_mod, par = c('lp__', params), ncol = 5, nrow = 6)
-dev.off()
+
+# create clearer labels
+my_labels <- gsub('_ancestry_|_climate_', ', ', params)
+
+# plot
+plot_list <- list() 
+df <- split(iris,iris$Species)
+
+for(i in seq_along(params)){
+  plot_list[[i]] <- rstan::traceplot(r0_mod, par = params[i]) + ggtitle(my_labels[i]) + ylab('') + theme(legend.position="none") + theme(plot.title = element_text(size = 12, hjust = 0.5))
+}
+
+tracePlots <- grid.arrange(grobs=plot_list, ncol = 4)
+
+ggsave('figures/R0_stan_zikv_traceplots.pdf', tracePlots, width = 8.5, height = 11)
 
 # ppc plots --------------------------------------------------------
 
@@ -221,9 +224,6 @@ ppc_estimates_quants <- do.call(rbind.data.frame, ppc_estimates)
 colnames(ppc_estimates_quants) <- c('lower', 'median', 'upper')
 ppc_estimates_quants$trait <- names(ppc_estimates)
 ppc_estimates_quants$trait <- gsub('_ppc.*', '', ppc_estimates_quants$trait)
-
-# load data
-# mod_data <- readRDS('../VBD-Data/aa_traits_denv.RData')
 
 prior_data_df <- mod_data[unique(ppc_estimates_quants$trait)]
 prior_data_df <- map_df(prior_data_df, ~as.data.frame(.x), .id='trait2')
@@ -260,7 +260,6 @@ dev.off()
 ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'pMI_ancestry_new')
 ggsave('figures/pMI_ancestry_model.pdf')  
 
-
 # R0 models --------------------------------------------------------------------
 ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'R0_ancestry_new')
 ggsave('figures/R0_ancestry.pdf')
@@ -284,6 +283,7 @@ siteR0Estimates <- surveys_r0_ancestry %>% left_join(surveys_r0_climate) %>% lef
 camLow <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 1275000)
 ggsave('figures/R0_scatterplot_cambodia_low_dose.pdf.pdf', camLow, width = 12, height = 4)
 
+# supplemental plots
 camMid <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 4375000)
 camHigh <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 40000000)
 senLow <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 1275000)
@@ -301,68 +301,30 @@ virusxdose <- plot_grid(camMid
                                      , 'Senegal 2011 Zika strain, low dose'
                                      , 'Senegal 2011 Zika strain, medium dose'
                                      , 'Senegal 2011 Zika strain, high dose')
-                        , hjust = -0.2
+                        , hjust = -0.15
                         )
 
 
 ggsave('figures/R0_scatterplots_all_strains_and_doses.pdf', virusxdose, width = 8.5, height = 11)
 
-
-# boxplot SI? --------------------
-ancestryr0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_ancestry_new', n = 500, dose = 1275000, virus = 0)
-climater0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_climate_new', n = 500, dose = 1275000, virus = 0)
-fullr0 <- boxplotSamples(validationName = 'surveys', genQuantName = 'R0_full_new', n = 500, dose = 1275000, virus = 0)
-
-# r0boxes <- do.call(rbind, list(ancestryr0, climater0, fullr0))
-# 
-# r0boxes$site <- fct_reorder(r0boxes$site, r0boxes$R0)
-# 
-# r0boxplot <- ggplot(r0boxes, aes(x=R0, y=site, fill=type)) + 
-#   geom_boxplot(outlier.shape = NA) +
-#   theme_bw() +
-#   geom_vline(xintercept = 1, linetype = 2) +
-#   xlim(0,6) +
-#   ylab('')
-# 
-# ggsave('figures/R0_boxplot_cambodia_low_dose.pdf', r0boxplot, width = 7, height = 10.5)
-
-# level & contour plots -----------------------------------------------------------------
+# contour plot -----------------------------------------------------------------
 contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
 
-coul <- viridis(100)
+contourPlot <- ggplot(contour_samps, aes(temp, anc, z=median)) +
+  geom_contour_filled() +
+  guides(fill=guide_legend(expression(R[0]))) +
+  metR::geom_text_contour(aes(z = median), col = 'white', size = 5) +
+  theme(panel.grid=element_blank(), text=element_text(size=15)) +  # delete grid lines
+  scale_x_continuous(limits=c(min(contour_samps$temp),max(contour_samps$temp)), expand=c(0,0)) + # set x limits
+  scale_y_continuous(limits=c(min(contour_samps$anc),max(contour_samps$anc)), expand=c(0,0)) +  # set y limits
+  xlab(expression(paste("Temperature (",degree,"C)"))) +
+  ylab('Proportion non-African ancestry') +
+  geom_point(surveys_r0_full, mapping = aes(x = temp, y = anc, z = 0), fill = 'black', color = 'white', pch = 16, size = 3) 
 
-pdf('figures/R0_level_plot.pdf', width = 9, height = 6)
-levelplot(median ~ temp * anc, 
-          contour_samps, 
-          cex = 1.2,
-          col.regions = coul,
-          xlab = expression(paste("Temperature (",degree,"C)")),
-          ylab = 'Proportion non-African ancestry',
-          colorkey=list(title=expression(R[0]))
-          ) + 
-  layer({panel.points(x = surveys_r0_full$temp, y = surveys_r0_full$anc, pch = 1, cex = 1.5, col = 'white', lwd = 2)})
-dev.off()
-
-df2 <- tidyr::spread(contour_samps[,c('temp', 'anc', 'median')], 'anc', 'median')
-df.x <- df2$temp
-df.y <- as.numeric(colnames(df2)[-1])
-df.z <- as.matrix(df2[,-1])
-
-pdf('figures/R0_contour_plot.pdf', width = 9, height = 6)
-filled.contour(df.x, df.y, df.z,
-               nlevels = 15,
-               col = viridis(15),
-               xlab = expression(paste("Temperature (",degree,"C)")),
-               ylab = 'Proportion non-African ancestry',
-               key.title = {par(cex.main = 1); title(main = expression(R[0]))},
-               plot.axes = {
-                 axis(1)
-                 axis(2)
-                 contour(df.x, df.y, df.z, add = T, col = 'white', labcex = 1.1)
-                 }
-               )
-points(x = surveys_r0_full$temp, y = surveys_r0_full$anc, pch = 1, cex = 1.5, col = 'white', lwd = 2)
-dev.off()
+ggsave('figures/R0_countour_plot.pdf')
+  
+surveyValidationPlots <- ggarrange(camLow, contourPlot, ncol = 1)
+ggsave('figures/fig1.pdf', surveyValidationPlots)
 
 # big cities through time ------------------------------------
 bc <- concatAncestrySamples(validationName = 'big_cities', genQuantName = 'R0_full_new', percentiles = 95)
