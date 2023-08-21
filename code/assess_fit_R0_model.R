@@ -68,35 +68,12 @@ concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   colnames(x) <- c('lower', 'median', 'upper')
   indexes <- which(mod_data$validationtype == validationName)
   x$anc <- mod_data$aa_new[indexes]
-  x$Dose <- mod_data$dose_new[indexes]
-  x$Virus <- mod_data$Virus_new[indexes]
-  x$Virus <- ifelse(x$Virus == 1, 'ZIKV_Senegal_2011', 'ZIKV_Cambodia_2010')
   x$site = mod_data$location[indexes]
   x$year = mod_data$year[indexes]
   x$temp = mod_data$temp_new[indexes]
   x$lat = mod_data$lat[indexes]
   x$lon = mod_data$lon[indexes]
   return(x)  
-}
-
-ancestryFitsAcrossTreatments <- function(validationName, genQuantName){
-  # get data
-  x <- concatAncestrySamples(validationName = validationName, genQuantName = genQuantName, percentiles = 95)
-  # plot labels
-  if(genQuantName == 'pMI_ancestry_new'){
-    yLabel = 'Pr(Infection)'
-  } else {
-    yLabel = expression(R[0])
-  }
-  # plot
-  ggplot(x, aes(x = anc, y = median, color = as.factor(Dose), fill = as.factor(Dose))) +
-    geom_line() +
-    geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.4, linetype = 'dashed') +
-    facet_wrap(~Virus) +
-    theme_classic() +
-    xlab('Proportion non-African ancestry') +
-    ylab(yLabel)
-  
 }
 
 plotWithUncertainty <- function(df, xval, yval){
@@ -123,14 +100,12 @@ plotWithUncertainty <- function(df, xval, yval){
 }
 
 
-plotSurveySites <- function(virus, dose){
-  # subset
-  x <- subset(siteR0Estimates, Virus == virus & Dose == dose)
+plotSurveySites <- function(x){
   # plot
   clim_vs_full <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Climate_median') + ylab(expression(paste('Climate model  ', R[0])))
   full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median') + ylab(expression(paste('Ancestry model  ', R[0])))
   # return grid of plots
-  plot_grid(clim_vs_full, full_vs_anc, nrow = 1) + ggtitle(paste0(virus, ' x ', dose))
+  plot_grid(clim_vs_full, full_vs_anc, nrow = 1)
 }
 
 overlay_distributions_plot <- function(mod, param_name, type, priorValue1, priorValue2){
@@ -244,26 +219,22 @@ dev.off()
 
 
 # trait fits --------------------------------------------------
-pdf('figures/R0_Zika_trait_fit_plots.pdf', width = 11, height = 8.5)
-par(mfrow = c(2, 3)) 
+pdf('figures/R0_Zika_trait_fit_plots.pdf', width = 11, height = 7.5)
+par(mfrow = c(2, 4)) 
 plotParameterSamples(validationName = 'temperature', genQuantName = 'alpha_climate_new', points = T)
 plotParameterSamples(validationName = 'temperature', genQuantName = 'b_climate_new', points = T)
 plotParameterSamples(validationName = 'temperature', genQuantName = 'pMI_climate_new', points = T)
 plotParameterSamples(validationName = 'temperature', genQuantName = 'EIR_climate_new', points = T)
 plotParameterSamples(validationName = 'temperature', genQuantName = 'lf_climate_new', points = T)
 plotParameterSamples(validationName = 'ancestry', genQuantName = 'omega_ancestry_new', points = T)
+plotParameterSamples(validationName = 'ancestry', genQuantName = 'pMI_ancestry_new', points = T)
 dev.off()
 
-# pMI ancestry modeled across strains and doses ---
-ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'pMI_ancestry_new')
-ggsave('figures/pMI_ancestry_model.pdf')  
-
 # R0 models --------------------------------------------------------------------
-ancestryFitsAcrossTreatments(validationName = 'ancestry', genQuantName = 'R0_ancestry_new')
-ggsave('figures/R0_ancestry.pdf')
-
-pdf('figures/R0_climate.pdf', width = 8, height = 6)
+pdf('figures/R0_climate_ancestry.pdf', width = 8, height = 5)
+par(mfrow = c(1, 2)) 
 plotParameterSamples(validationName = 'temperature', genQuantName = 'R0_climate_new', points = F)
+plotParameterSamples(validationName = 'ancestry', genQuantName = 'R0_ancestry_new', points = F)
 dev.off()
 
 # survey site scatterplots -----------------------------------------------------
@@ -278,39 +249,14 @@ colnames(surveys_r0_full)[1:3] <- paste0('Full_', colnames(surveys_r0_full)[1:3]
 
 siteR0Estimates <- surveys_r0_ancestry %>% left_join(surveys_r0_climate) %>% left_join(surveys_r0_full)
 
-camMid <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 4375000)
-ggsave('figures/R0_scatterplot_cambodia_med_dose.pdf.pdf', camLow, width = 12, height = 4)
-
-# supplemental plots
-camLow <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 1275000)
-camHigh <- plotSurveySites(virus = 'ZIKV_Cambodia_2010',  dose = 40000000)
-senLow <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 1275000)
-senMid <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 4375000)
-senHigh <- plotSurveySites(virus = 'ZIKV_Senegal_2011',  dose = 40000000)
-
-virusxdose <- plot_grid(camMid
-                        , camHigh
-                        , senLow
-                        , senMid
-                        , senHigh
-                        , nrow = 5
-                        , labels = c('Cambodia 2010 Zika strain, low dose'
-                                     , 'Cambodia 2010 Zika strain, high dose'
-                                     , 'Senegal 2011 Zika strain, low dose'
-                                     , 'Senegal 2011 Zika strain, medium dose'
-                                     , 'Senegal 2011 Zika strain, high dose')
-                        , hjust = -0.15
-                        )
-
-
-ggsave('figures/R0_scatterplots_all_strains_and_doses.pdf', virusxdose, width = 8.5, height = 11)
+sitescatter <- plotSurveySites(x = siteR0Estimates)
+ggsave('figures/R0_scatterplot.pdf', sitescatter, width = 9, height = 6)
 
 # N with R0 > 1 / model
-Nsites <- subset(siteR0Estimates, Virus == 'ZIKV_Cambodia_2010' &  Dose == 4375000)
-sum(Nsites$Climate_median>1)
-sum(Nsites$Ancestry_median>1)
-sum(Nsites$Full_median>1)
-Nsites$site[which(Nsites$Full_median>1)]
+sum(siteR0Estimates$Climate_median>1)
+sum(siteR0Estimates$Ancestry_median>1)
+sum(siteR0Estimates$Full_median>1)
+siteR0Estimates$site[which(siteR0Estimates$Full_median>1)]
 
 # contour plot -----------------------------------------------------------------
 contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
@@ -328,7 +274,7 @@ contourPlot <- ggplot(contour_samps, aes(temp, anc, z=median)) +
 
 ggsave('figures/R0_countour_plot.pdf')
   
-surveyValidationPlots <- ggarrange(camMid, contourPlot, ncol = 1)
+surveyValidationPlots <- ggarrange(sitescatter, contourPlot, ncol = 1)
 ggsave('figures/fig1.pdf', surveyValidationPlots)
 
 # big cities through time ------------------------------------
