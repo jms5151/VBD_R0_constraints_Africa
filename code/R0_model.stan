@@ -21,11 +21,9 @@ data {
   vector[pMI_climate_N] pMI_climate;                            // vector of trait pMI
   
   // pMI ancestry (prob mosquito infection)
-  int<lower=0> pMI_ancestry_N;                                  // number of observations
-  int<lower=0> pMI_ancestry_Trials[pMI_ancestry_N];             // number of trials for each observation
-  int<lower=0> pMI_ancestry_Infected[pMI_ancestry_N];           // number of successes for each observation
-  matrix[pMI_ancestry_N, 2] pMI_ancestry_X;                     // matrix of covariates (continuous)
-  int<lower=0, upper=1> pMI_ancestry_Virus[pMI_ancestry_N];     // categorical variable
+  int pMI_ancestry_N;                                         // number of observations
+  vector[pMI_ancestry_N] pMI_ancestry;                        // vector of prob. mosquito infectiousness | ancestry
+  vector[pMI_ancestry_N] pMI_ancestry_aa;                     // vector of proportion aa ancestry
 
   // EIR (extrinsic incubation rate)
   int EIR_climate_N;                                            // number of observations
@@ -41,8 +39,6 @@ data {
   int N_new;
   vector[N_new] temp_new;
   vector[N_new] aa_new;
-  int<lower=0, upper=1> Virus_new[N_new];
-  matrix[N_new, 2] X_new;
 }
 
 parameters {
@@ -72,9 +68,10 @@ parameters {
   real<lower=0> pMI_climate_sigma;                              // noise
 
   // pMI ancestry (prob mosquito infection)
-  real pMI_ancestry_b0;                                         // intercept
-  vector[2] pMI_ancestry_beta;                                  // coefficients for continuous covariates
-  real pMI_ancestry_gamma;                                      // coefficient for categorical covariate
+  real<lower=0> pMI_ancestry_constant;                        // parameter c, lower limit
+  real<lower=0, upper=1> pMI_ancestry_d;                      // parameter d, upper limit
+  real<lower=0> pMI_ancestry_e;                               // parameter e, dose responding to halfway between c and d
+  real<lower=0> pMI_ancestry_sigma;                           // noise
 
   // EIR (extrinsic incubation rate)
   real<lower=0, upper=0.01> EIR_climate_constant;               // parameter c
@@ -145,12 +142,14 @@ model {                                                         // Fit models to
   }
 
   // pMI ancestry (prob mosquito infection)
-  pMI_ancestry_b0 ~ normal(-13,10);                             // prior for intercept
-  pMI_ancestry_beta ~ normal(0, 5);                             // priors for continuous variable coefficients
-  pMI_ancestry_gamma ~ normal(0, 5);                            // prior for categorical variable coefficients
-  
-  for (k3 in 1:pMI_ancestry_N) {
-    pMI_ancestry_Infected[k3] ~ binomial(pMI_ancestry_Trials[k3], inv_logit(pMI_ancestry_b0 + pMI_ancestry_X[k3] * pMI_ancestry_beta + pMI_ancestry_gamma * pMI_ancestry_Virus[k3]));
+  pMI_ancestry_constant ~ uniform(0,1);                       // prior for c
+  pMI_ancestry_d ~ uniform(0,10);                             // prior for d
+  pMI_ancestry_e ~ uniform(0,10);                             // prior for e
+  pMI_ancestry_sigma ~ uniform(0,100);                        // prior for sigma
+
+  for(kk in 1:pMI_ancestry_N){
+    real pMI_ancestry_mu = pMI_ancestry_constant + ((pMI_ancestry_d - pMI_ancestry_constant)/(1 + (pMI_ancestry_e / pMI_ancestry_aa[kk])));
+    pMI_ancestry[kk] ~ normal(pMI_ancestry_mu, pMI_ancestry_sigma);
   }
 
   // EIR (extrinsic incubation rate)
@@ -190,10 +189,9 @@ generated quantities {
   real alpha_climate_ppc[alpha_climate_N];                          // alpha (biting rate)        
   real b_climate_ppc[b_climate_N];                                  // b (prob mosquito infectiousness)
   real pMI_climate_ppc[pMI_climate_N];                              // pMI (prob mosquito infection)
+  real pMI_ancestry_ppc[pMI_ancestry_N];                            // pMI (prob mosquito infection)
   real EIR_climate_ppc[EIR_climate_N];                              // EIR (extrinsic incubation rate)
   real lf_climate_ppc[lf_climate_N];                                // lifespan (1/mosquito mortality rate)
-  real<lower=0> pMI_ancestry_Infected_ppc[pMI_ancestry_N];          //
-  real<lower=0, upper=1> pMI_ancestry_propInf_ppc[pMI_ancestry_N];  //
 
   // new parameters for predictions
   vector[N_new] NmNh_new;                                           // ratio of mosquitoes to humans
@@ -210,7 +208,7 @@ generated quantities {
   vector[N_new] EIR_climate_new;                                    // EIR (extrinsic incubation rate)
   vector[N_new] lf_climate_new;                                     // lifespan (1/mosquito mortality rate)
   vector[N_new] pMI_ancestry_new;                                   // pMI (prob mosquito infection)
-  vector[N_new] omega_ancestry_new;                                          // omega (prob biting human)
+  vector[N_new] omega_ancestry_new;                                 // omega (prob biting human)
 
   // R0 models
   vector[N_new] R0_climate_new;
@@ -244,8 +242,8 @@ generated quantities {
 
  // ppc pMI ancestry (prob mosquito infection)
   for (rr in 1:pMI_ancestry_N){
-    pMI_ancestry_propInf_ppc[rr] = inv_logit(pMI_ancestry_b0 + pMI_ancestry_X[rr] * pMI_ancestry_beta + pMI_ancestry_gamma * pMI_ancestry_Virus[rr]);
-    pMI_ancestry_Infected_ppc[rr] = binomial_rng(pMI_ancestry_Trials[rr], pMI_ancestry_propInf_ppc[rr]);
+    real pMI_ancestry_mu_ppc = pMI_ancestry_constant + ((pMI_ancestry_d - pMI_ancestry_constant)/(1 + (pMI_ancestry_e / pMI_ancestry_aa[rr])));
+    pMI_ancestry_ppc[rr] = normal_rng(pMI_ancestry_mu_ppc, pMI_ancestry_sigma);
   }
 
   // ppc EIR (extrinsic incubation rate)
@@ -286,7 +284,7 @@ generated quantities {
     pMI_climate_new[zz] = normal_rng(pMI_climate_rmax * exp(-0.5 * (fabs(temp_new[zz] - pMI_climate_Topt)/pMI_climate_a)^2), pMI_climate_sigma);
 
     // pMI ancestry (prob mosquito infection)
-    pMI_ancestry_new[zz] = inv_logit(pMI_ancestry_b0 + X_new[zz] * pMI_ancestry_beta + pMI_ancestry_gamma * Virus_new[zz]);
+    pMI_ancestry_new[zz] = normal_rng(pMI_ancestry_constant + ((pMI_ancestry_d - pMI_ancestry_constant)/(1 + (pMI_ancestry_e / aa_new[zz]))), pMI_ancestry_sigma);
 
     // EIR (extrinsic incubation rate)
     if(EIR_climate_Tmin < temp_new[zz] && EIR_climate_Tmax > temp_new[zz]){

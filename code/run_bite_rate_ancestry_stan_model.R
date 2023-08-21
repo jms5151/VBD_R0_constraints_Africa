@@ -26,8 +26,8 @@ model_data <-
     omega_ancestry_N = nrow(br_data)
     , omega_ancestry = br_data$prob
     , aa_ancestry = br_data$prop_aaa_ancestry
-    , ancestry_N_new = length(seq(0, 1, 0.05))
-    , aa_ancestry_new = seq(0, 1, 0.05)
+    # , ancestry_N_new = length(seq(0, 1, 0.05))
+    # , aa_ancestry_new = seq(0, 1, 0.05)
   )
 
 # fit model
