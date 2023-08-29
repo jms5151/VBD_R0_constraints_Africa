@@ -40,8 +40,6 @@ model_data <-
     omega_ancestry_N = nrow(oid50)
     , omega_ancestry = oid50$pMI
     , aa_ancestry = oid50$Aaa
-    # , ancestry_N_new = length(seq(0, 1, 0.05))
-    # , aa_ancestry_new = seq(0, 1, 0.05)
   )
 
 # fit model
@@ -49,10 +47,5 @@ stan_model_fit_ancestry_omega <- sampling(
   stan_model('code/model_biting_rate_given_ancestry.stan')
   , data = model_data
   , iter = 2000
-  # , init = list(list(omega_ancestry_constant = 0.28
-  #               , omega_ancestry_d = 0.5
-  #               , omega_ancestry_e = 0.05
-  #               , omega_ancestry_sigma = 0.2))
-  # , chains = 1
 )
 

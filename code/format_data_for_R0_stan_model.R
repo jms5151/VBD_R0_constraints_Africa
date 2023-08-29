@@ -18,20 +18,12 @@ omega.df <- omega.df %>% arrange(prop_aaa_ancestry)
 # ancestry dependent pMI based on OID50 -------------------------------
 oid50.df <- read.csv('../VBD-data/OID50s_ZIKV_Cambodia.csv')
 
-# most infectious strain oid50.df value 
-mostInfStrain <- min(oid50.df$OID50)
-
-# calculate pMI with reference to most infectious strain (Guadeloupe)
-oid50.df$pMI <- mostInfStrain/oid50.df$OID50
-
-# Override pMI calculation for CPV in reference to original study Guadeloupe population
-oid50.df$pMI[oid50.df$Population == 'CPV' & oid50.df$Study == 'Rose et al.'] <- oid50.df$OID50[oid50.df$Population == 'Guadeloupe' & oid50.df$Study == 'Rose et al.'] / oid50.df$OID50[oid50.df$Population == 'CPV' & oid50.df$Study == 'Rose et al.']
+# calculate pMI with reference to Guadeloupe strain
+oid50.df$pMI <- ifelse(oid50.df$Study == 'Aubry et al.', oid50.df$OID50[oid50.df$Population == 'Guadeloupe' & oid50.df$Study == 'Aubry et al.'] / oid50.df$OID50, 
+                       oid50.df$OID50[oid50.df$Population == 'Guadeloupe' & oid50.df$Study == 'Rose et al.'] / oid50.df$OID50)
 
 # assume probability of most infectious strain is 50%, reduce all pMI values by 0.5 
-oid50.df$pMI <- oid50.df$pMI - 0.5
-
-# remove Rose et al study other than CPV
-oid50.df <- subset(oid50.df, Study == 'Aubry et al.' | Population == 'CPV')
+oid50.df$pMI <- oid50.df$pMI - 0.70
 
 # transform from 0-100 to 0-1 to match omega
 oid50.df$Aaa <- oid50.df$Aaa/100
@@ -41,6 +33,9 @@ oid50.df$Aaa[oid50.df$Aaa == 0] <- 0.000001
 
 # order by ancestry
 oid50.df <- oid50.df %>% arrange(Aaa)
+
+# library(ggplot2)
+# ggplot(oid50.df, aes(x = Aaa, y = pMI)) + geom_point(size = 6, alpha = 0.3) + theme_bw() + geom_smooth(method = 'lm', formula = y ~ poly(x, 2))
 
 # create simulated new datasets and format to combine --------------------------
 
