@@ -1,5 +1,8 @@
-# Arboviruses in Africa project - investigating constrains on R0
+# Zika virus in Africa 
+
+Description: The code provided supports the study titled 'Vector competence and biting behaviour shape the present and future of Zika virus transmission patterns in Africa'. This code runs alternative models for predicting R0, based on traits that vary with mosquito ancestry (i.e., genetic population variation) and climate. 
+
+Authors: Jamie M. Caldwell, Louis Lambrechts, and Noah Rose
 
 The main code for this project is run_R0_models.R. 
 
-This code runs alternative models for predicting R0, based on traits that vary with climate and mosquito diversity. 
