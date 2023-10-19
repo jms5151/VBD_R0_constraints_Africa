@@ -1,8 +1,5 @@
 # Zika virus in Africa 
 
-Description: The code provided supports the study titled 'Vector competence and biting behaviour shape the present and future of Zika virus transmission patterns in Africa'. This code runs alternative models for predicting R0, based on traits that vary with mosquito ancestry (i.e., genetic population variation) and climate. 
+Description: The repository was used to develop a project exploring the role of mosquito ancestry and climate in limiting ZIKV transmission in Africa. The cleaned and streamlined codes are available in another repository: 'https://github.com/jms5151/ZIKV_Africa/blob/main/README.md'. 
 
 Authors: Jamie M. Caldwell, Louis Lambrechts, and Noah Rose
-
-The main code for this project is run_R0_models.R. 
-
