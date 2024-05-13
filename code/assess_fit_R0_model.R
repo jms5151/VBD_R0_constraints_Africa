@@ -18,7 +18,7 @@ load('../VBD-data/model_data_zikv.RData')
 mod_data <- model_data_zikv
 
 # extract samples
-list_of_draws <- rstan::extract(model_)
+list_of_draws <- rstan::extract(r0_mod)
 
 # functions --------------------------------------------------------------------
 pullSamples <- function(validationName, genQuantName, percentiles = 95){
@@ -82,7 +82,7 @@ plotWithUncertainty <- function(df, xval, yval){
   yupper <- gsub('_median', '_upper', yval)
   ylower <- gsub('_median', '_lower', yval)
   df$site <- ifelse(df[,xval] > 1 & df[,yval] > 1, df$site, '')
-  
+
   ggplot(df, aes_string(x = df[,xval], y = df[,yval])) +
     geom_errorbarh(aes_string(xmax = df[,xupper], xmin = df[,xlower]), col = 'darkgrey') +
     geom_errorbar(aes_string(ymax = df[,yupper], ymin = df[,ylower]), col = 'darkgrey') +
@@ -93,19 +93,8 @@ plotWithUncertainty <- function(df, xval, yval){
     xlim(0,4) +
     geom_hline(yintercept = 1,linetype=2) +
     geom_vline(xintercept = 1,linetype=2) +
-    xlab(expression(paste('Full model ', R[0]))) +
-    ylab('') +
     geom_text_repel(aes(label = site)) +
     theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm"))
-}
-
-
-plotSurveySites <- function(x){
-  # plot
-  clim_vs_full <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Climate_median') + ylab(expression(paste('Climate model  ', R[0])))
-  full_vs_anc <- plotWithUncertainty(df = x, xval = 'Full_median', yval = 'Ancestry_median') + ylab(expression(paste('Ancestry model  ', R[0])))
-  # return grid of plots
-  plot_grid(clim_vs_full, full_vs_anc, nrow = 1)
 }
 
 overlay_distributions_plot <- function(mod, param_name, type, priorValue1, priorValue2){
@@ -177,7 +166,6 @@ my_labels <- gsub('_ancestry_|_climate_', ', ', params)
 
 # plot
 plot_list <- list() 
-df <- split(iris,iris$Species)
 
 for(i in seq_along(params)){
   plot_list[[i]] <- rstan::traceplot(r0_mod, par = params[i]) + ggtitle(my_labels[i]) + ylab('') + theme(legend.position="none") + theme(plot.title = element_text(size = 12, hjust = 0.5))
@@ -254,11 +242,13 @@ dev.off()
 # R0 models --------------------------------------------------------------------
 pdf('figures/R0_climate_ancestry.pdf', width = 8, height = 5)
 par(mfrow = c(1, 2)) 
-plotParameterSamples(validationName = 'temperature', genQuantName = 'R0_climate_new', points = F)
 plotParameterSamples(validationName = 'ancestry', genQuantName = 'R0_ancestry_new', points = F)
+plotParameterSamples(validationName = 'temperature', genQuantName = 'R0_climate_new', points = F)
 dev.off()
 
-# survey site scatterplots -----------------------------------------------------
+# survey site plots -----------------------------------------------------
+
+# scatterplots
 surveys_r0_ancestry <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_ancestry_new', percentiles = 50)
 colnames(surveys_r0_ancestry)[1:3] <- paste0('Ancestry_', colnames(surveys_r0_ancestry)[1:3])
 
@@ -268,22 +258,38 @@ colnames(surveys_r0_climate)[1:3] <- paste0('Climate_', colnames(surveys_r0_clim
 surveys_r0_full <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_full_new', percentiles = 50)
 colnames(surveys_r0_full)[1:3] <- paste0('Full_', colnames(surveys_r0_full)[1:3])
 
-siteR0Estimates <- surveys_r0_ancestry %>% left_join(surveys_r0_climate) %>% left_join(surveys_r0_full)
+surveys_r0_ancestry_omega <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_ancestry_omega_new', percentiles = 50)
+colnames(surveys_r0_ancestry_omega)[1:3] <- paste0('omega_', colnames(surveys_r0_ancestry_omega)[1:3])
 
-sitescatter <- plotSurveySites(x = siteR0Estimates)
-ggsave('figures/R0_scatterplot.pdf', sitescatter, width = 9, height = 6)
+surveys_r0_ancestry_pMI <- concatAncestrySamples(validationName = 'surveys', genQuantName = 'R0_ancestry_pMI_new', percentiles = 50)
+colnames(surveys_r0_ancestry_pMI)[1:3] <- paste0('pMI_', colnames(surveys_r0_ancestry_pMI)[1:3])
+
+siteR0Estimates <- surveys_r0_ancestry %>% 
+  left_join(surveys_r0_climate) %>% 
+  left_join(surveys_r0_full) %>%
+  left_join(surveys_r0_ancestry_omega) %>%
+  left_join(surveys_r0_ancestry_pMI)
+
+
+Full_v_Anc <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Ancestry_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Ancestry model  ', R[0])))
+Full_v_Clim <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Climate_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Climate model  ', R[0])))
+Omega_v_pMI<- plotWithUncertainty(df = siteR0Estimates, xval = 'omega_median', yval = 'pMI_median') + xlab(expression(paste('Ancestry model  ', R[0], ' (omega only)'))) + ylab(expression(paste('Ancestry model  ', R[0], ' (pMI only)')))
 
 # N with R0 > 1 / model
 sum(siteR0Estimates$Climate_median>1)
 sum(siteR0Estimates$Ancestry_median>1)
+sum(siteR0Estimates$omega_median>1)
+sum(siteR0Estimates$pMI_median>1)
 sum(siteR0Estimates$Full_median>1)
 siteR0Estimates$site[which(siteR0Estimates$Full_median>1)]
 
-# contour plot -----------------------------------------------------------------
+# contour plot 
 contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
 
+surveys_r0_full$site2 <- ifelse(surveys_r0_full$Full_median >= 1, surveys_r0_full$site, NA)
+
 contourPlot <- ggplot(contour_samps, aes(temp, anc, z=median)) +
-  geom_contour_filled() +
+  geom_contour_filled(breaks = seq(from = 0, to = 3, by = 0.25)) +
   guides(fill=guide_legend(expression(R[0]))) +
   metR::geom_text_contour(aes(z = median), col = 'white', size = 5) +
   theme(panel.grid=element_blank(), text=element_text(size=15)) +  # delete grid lines
@@ -291,12 +297,13 @@ contourPlot <- ggplot(contour_samps, aes(temp, anc, z=median)) +
   scale_y_continuous(limits=c(min(contour_samps$anc),max(contour_samps$anc)), expand=c(0,0)) +  # set y limits
   xlab(expression(paste("Temperature (",degree,"C)"))) +
   ylab('Proportion non-African ancestry') +
-  geom_point(surveys_r0_full, mapping = aes(x = temp, y = anc, z = 0), fill = 'black', color = 'white', pch = 16, size = 3) 
+  geom_point(surveys_r0_full, mapping = aes(x = temp, y = anc, z = 0), fill = 'black', color = 'white', pch = 16, size = 3) +
+  geom_text_repel(data = surveys_r0_full, aes(x = temp, y = anc, z = 0, label = site2), size = 6, color = 'white', nudge_x = 2, nudge_y = 0.03)
 
-# ggsave('figures/R0_countour_plot.pdf')
-  
-surveyValidationPlots <- ggarrange(sitescatter, contourPlot, ncol = 1)
-ggsave('figures/fig1.pdf', surveyValidationPlots)
+
+# combine scatter and contour plots and save
+surveyValidationPlots <- ggarrange(Full_v_Anc, Full_v_Clim, Omega_v_pMI, contourPlot, ncol = 2, nrow = 2, labels = c('A', 'B', 'C', 'D'))
+ggsave('figures/fig1.pdf', surveyValidationPlots, width = 12, height = 9)
 
 # big cities through time ------------------------------------
 bc <- concatAncestrySamples(validationName = 'big_cities', genQuantName = 'R0_full_new', percentiles = 95)
@@ -331,7 +338,7 @@ africa <- world %>%
 
 africaMap <- ggplot(data = africa) +
   geom_sf(fill = 'grey95') +
-  coord_sf(xlim = c(-20, 55), ylim = c(-40, 40)) +
+  coord_sf(xlim = c(-20, 55), ylim = c(-50, 50)) +
   geom_point(data = bc2, mapping = aes(x = lon, y = lat, color = Suitability, size = R0_max)) +
   xlab('') +
   ylab('') +
@@ -340,15 +347,16 @@ africaMap <- ggplot(data = africa) +
     labels = c('Not imminent', 'Future', 'Present', 'Past'),
     guide = guide_legend(reverse = TRUE, override.aes=list(lwd = 1.3))
   ) + 
-  # theme(legend.position = c(.15, .3), legend.background = element_rect(fill='transparent')) +
-  theme(legend.position = 'bottom', legend.direction = 'vertical', legend.key = element_rect(fill = "transparent")) +
+  theme_bw() +
+  theme(legend.position = c(.15, .3), legend.background = element_rect(fill='transparent')) +
+  # theme(legend.position = 'bottom', legend.direction = 'vertical', legend.key = element_rect(fill = "transparent")) +
   scale_size_continuous(name = expression(paste('Maximum ', R[0])), breaks = seq(0,3,0.5)) +
   ### May want to change title regarding city pops
   labs(title = expression(paste('Maximum ', R[0],' between 1970 & 2100')),
-       subtitle = 'Color indicates whether conditions were suitable for Zika transmission \nin the past (1970), present (2020), or future (2090-2100)') +
-  scale_y_discrete(position = "right")
+       # subtitle = 'Color indicates whether conditions were suitable for Zika transmission \nin the past (1970), present (2020), or future (2090-2100)'
+       ) +
+  scale_y_discrete(position = "right") 
 
-# ggsave('figures/Africa_R0_map.pdf', africaMap, width = 7, height = 7)
 
 # lollipop plot
 bc3 <- bc %>%
@@ -364,7 +372,7 @@ lollipopPlot <-ggplot(bc3, aes(x = median, y = site, pch = as.factor(year), grou
   xlab(expression('R'[0])) +
   ylab('') +
   geom_vline(xintercept = 1, linetype = 2) +
-  ggtitle(expression(paste('Change in ', R[0],' through time'))) +
+  labs(title = expression(paste('Change in ', R[0],' through time'))) +
   theme(legend.position = c(.8, .2), legend.background = element_rect(fill='transparent')) + 
   scale_color_manual(
     values = c('navyblue', 'darkgreen', 'orange', 'maroon'),
@@ -375,13 +383,12 @@ lollipopPlot <-ggplot(bc3, aes(x = median, y = site, pch = as.factor(year), grou
                      values = c('1970' = 15, '2020' = 2, '2090-2100' = 16)
   )
 
-# ggsave('figures/big_cities_lollipop_1970-2100.pdf', lollipopPlot, width = 12, height = 11)
-
 # combine
-bigCities <- plot_grid(lollipopPlot, africaMap, ncol = 2)
+bigCities <- ggarrange(lollipopPlot, africaMap, ncol = 2, labels = c('A', 'B'))
+# bigCities <- plot_grid(lollipopPlot, africaMap, ncol = 2)
 
 # save
-ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 11)
+ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 14)
 
 # prior vs posterior plots -----------------------------------
 o_anc_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'omega_ancestry_constant', type = 'uniform', priorValue1 = 0, priorValue2 = 1)

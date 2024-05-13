@@ -137,6 +137,18 @@ cmip_mean <- cmip %>%
   summarise(temp = mean(temp)) %>%
   as.data.frame()
 
+# #IQR for paper
+# cmip_mean <- cmip %>%
+#   group_by(source, City, year) %>%
+#   summarise(temp = mean(temp)) %>%
+#   group_by(City, year) %>%
+#   summarise(mtemp = mean(temp), minT = min(temp), maxT = max(temp), diff = maxT - minT) %>%
+#   as.data.frame()
+# quantile(cmip_mean$diff)
+# 
+# quantile(cmip_mean$diff[cmip_mean$year == '2020'])
+# quantile(cmip_mean$diff[cmip_mean$year == '2090-2100'])
+
 # fix city spelling to match aaa
 # this is a terrible way of doing it, but it works
 cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
