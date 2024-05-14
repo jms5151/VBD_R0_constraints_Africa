@@ -149,14 +149,6 @@ cmip_mean <- cmip %>%
 # quantile(cmip_mean$diff[cmip_mean$year == '2020'])
 # quantile(cmip_mean$diff[cmip_mean$year == '2090-2100'])
 
-# fix city spelling to match aaa
-# this is a terrible way of doing it, but it works
-cmip_mean$City <- gsub('.\\¿½', 'é', cmip_mean$City)
-cmip_mean$City <- gsub('_', ' ', cmip_mean$City)
-cmip_mean$City[cmip_mean$City == 'Durban(eThekwini)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-cmip_mean$City[cmip_mean$City == 'East Rand(Ekurhuleni)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-cmip_mean$City[cmip_mean$City == 'Pretoria(Tshwane)'] <- sort(setdiff(aaa_cities$City, cmip_mean$City))[1]
-
 # combine ancestry and temperature data for cities
 big_cities <- aaa_cities %>% 
   left_join(cmip_mean[,c('City', 'year', 'temp')]) %>%
@@ -182,6 +174,22 @@ contour <- contour %>%
     , 'validation_type' = 'contour'
   )
 
+# seroprevalence data
+sero <- read.csv('../VBD-data/seroSites_Aaa.csv')
+# sero$Location <- paste(sero$Site, sero$Country, by = ', ')
+
+sero_data <- sero %>%
+  mutate('anc' = sero$aaa2015
+         , 'temp' = sero$bio8_20
+         , 'Location' = paste(sero$Site, sero$Country, by = ', ')
+         , 'lon' = sero$Lon
+         , 'lat' = sero$Lat
+         , 'year' = rep(NA, nrow(sero))
+         , 'validation_type' = 'seroprevalence'
+  )
+
+sero_data <- sero_data[, c('anc', 'temp', 'Location', 'lon', 'lat', 'year', 'validation_type')]
+
 # combine new data ---
 new_data <- do.call(rbind, list(
   anc_df
@@ -189,6 +197,7 @@ new_data <- do.call(rbind, list(
   , survey_new
   , big_cities
   , contour
+  , sero_data
 ))
 
 # combine all data to fit and generate data with Zika model
