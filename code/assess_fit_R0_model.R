@@ -61,6 +61,32 @@ plotParameterSamples <- function(validationName, genQuantName, points){
   }
 }
 
+r0_plot <- function(validationName, genQuantName) {
+  # get samples
+  x <- pullSamples(validationName = validationName, genQuantName = genQuantName)
+  # get data
+  indexes <- which(mod_data$validationtype == validationName)
+  if(grepl('climate', genQuantName) == TRUE){
+    xvals <- mod_data$temp_new[indexes]
+    xLabel <- expression(paste("Temperature (",degree,"C)"))
+    pointDataXColName <- gsub('_new', '_temp', genQuantName)
+  } else if(grepl('ancestry', genQuantName) == TRUE){
+    xvals <- mod_data$aa_new[indexes]
+    xLabel <- 'Prop. non-African ancestry'
+    pointDataXColName <- gsub('_new', '_aa', genQuantName)
+  }
+  p <- ggplot() +
+    geom_line(aes(xvals, x[,2])) +
+    geom_line(aes(xvals, x[,1]), col = 'red', linetype = 'dashed') +
+    geom_line(aes(xvals, x[,3]), col = 'red', linetype = 'dashed') +
+    theme_classic() +
+    theme(text = element_text(size = 16)) +
+    ylab(expression(R[0])) +
+    xlab(xLabel)
+  
+  return(p)
+}
+
 concatAncestrySamples <- function(validationName, genQuantName, percentiles){
   # get data
   x <- pullSamples(validationName = validationName, genQuantName = genQuantName, percentiles)
@@ -127,6 +153,7 @@ overlay_distributions_plot <- function(mod, param_name, type, priorValue1, prior
       )
   }
 }
+
 
 
 # trace plots ------------------------------------------------------
@@ -240,11 +267,15 @@ plotParameterSamples(validationName = 'temperature', genQuantName = 'pMI_climate
 dev.off()
 
 # R0 models --------------------------------------------------------------------
-pdf('figures/R0_climate_ancestry.pdf', width = 8, height = 5)
-par(mfrow = c(1, 2)) 
-plotParameterSamples(validationName = 'ancestry', genQuantName = 'R0_ancestry_new', points = F)
-plotParameterSamples(validationName = 'temperature', genQuantName = 'R0_climate_new', points = F)
-dev.off()
+# pdf('figures/R0_climate_ancestry.pdf', width = 8, height = 5)
+# par(mfrow = c(1, 2)) 
+# plotParameterSamples(validationName = 'ancestry', genQuantName = 'R0_ancestry_new', points = F)
+# plotParameterSamples(validationName = 'temperature', genQuantName = 'R0_climate_new', points = F)
+# dev.off()
+anc_r0_plot <- r0_plot(validationName = 'ancestry', genQuantName = 'R0_ancestry_new')
+temp_r0_plot <- r0_plot(validationName = 'temperature', genQuantName = 'R0_climate_new')
+
+# points(v$bio8_20, v$Seroprevalence/20, pch = 16, ylim = c(0,100), xlim = c(10, 40))
 
 # survey site plots -----------------------------------------------------
 
@@ -270,10 +301,12 @@ siteR0Estimates <- surveys_r0_ancestry %>%
   left_join(surveys_r0_ancestry_omega) %>%
   left_join(surveys_r0_ancestry_pMI)
 
+## Save here for new R0 values
+write.csv(siteR0Estimates, '../VBD-data/New_R0_values.csv', row.names  =  F)
 
 Full_v_Anc <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Ancestry_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Ancestry model  ', R[0])))
 Full_v_Clim <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Climate_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Climate model  ', R[0])))
-Omega_v_pMI<- plotWithUncertainty(df = siteR0Estimates, xval = 'omega_median', yval = 'pMI_median') + xlab(expression(paste('Ancestry model  ', R[0], ' (omega only)'))) + ylab(expression(paste('Ancestry model  ', R[0], ' (pMI only)')))
+Omega_v_pMI <- plotWithUncertainty(df = siteR0Estimates, xval = 'omega_median', yval = 'pMI_median') + xlab(expression(paste('Ancestry model  ', R[0], ' (omega only)'))) + ylab(expression(paste('Ancestry model  ', R[0], ' (pMI only)')))
 
 # N with R0 > 1 / model
 sum(siteR0Estimates$Climate_median>1)
@@ -283,13 +316,13 @@ sum(siteR0Estimates$pMI_median>1)
 sum(siteR0Estimates$Full_median>1)
 siteR0Estimates$site[which(siteR0Estimates$Full_median>1)]
 
-# contour plot 
+# contour plot -------------
 contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
 
 surveys_r0_full$site2 <- ifelse(surveys_r0_full$Full_median >= 1, surveys_r0_full$site, NA)
 
 contourPlot <- ggplot(contour_samps, aes(temp, anc, z=median)) +
-  geom_contour_filled(breaks = seq(from = 0, to = 3, by = 0.25)) +
+  geom_contour_filled(breaks = seq(from = 0, to = 5, by = 0.5)) +
   guides(fill=guide_legend(expression(R[0]))) +
   metR::geom_text_contour(aes(z = median), col = 'white', size = 5) +
   theme(panel.grid=element_blank(), text=element_text(size=15)) +  # delete grid lines
@@ -298,8 +331,10 @@ contourPlot <- ggplot(contour_samps, aes(temp, anc, z=median)) +
   xlab(expression(paste("Temperature (",degree,"C)"))) +
   ylab('Proportion non-African ancestry') +
   geom_point(surveys_r0_full, mapping = aes(x = temp, y = anc, z = 0), fill = 'black', color = 'white', pch = 16, size = 3) +
-  geom_text_repel(data = surveys_r0_full, aes(x = temp, y = anc, z = 0, label = site2), size = 6, color = 'white', nudge_x = 2, nudge_y = 0.03)
+  geom_text_repel(data = surveys_r0_full, aes(x = temp, y = anc, z = 0, label = site2), size = 6, color = 'white', nudge_x = 2, nudge_y = 0.06)
 
+r0_contours <- plot_grid(anc_r0_plot, temp_r0_plot, contourPlot, ncol = 3, rel_widths = c(0.5, 0.5, 0.9))
+ggsave('figures/r0_and_contours.pdf', r0_contours, width = 12, height = 4)
 
 # combine scatter and contour plots and save
 surveyValidationPlots <- ggarrange(Full_v_Anc, Full_v_Clim, Omega_v_pMI, contourPlot, ncol = 2, nrow = 2, labels = c('A', 'B', 'C', 'D'))
@@ -451,3 +486,53 @@ p <- plot_grid(o_anc_const
 )
 ggsave('figures/prior_vs_posterior_plots.pdf', p, width = 11, height = 11)
 
+
+# R0 data
+
+
+# seroprevalence validation
+x <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = 'R0_full_new', percentiles = 95)
+y <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = 'R0_climate_new', percentiles = 95)
+z <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = 'R0_ancestry_new', percentiles = 95)
+
+v <- read.csv('../VBD-data/seroSites_Aaa.csv')
+
+v$R0_full_median <- x$median
+v$R0_full_lower <- x$lower
+v$R0_full_upper <- x$upper
+
+v$R0_climate_median <- y$median
+v$R0_climate_lower <- y$lower
+v$R0_climate_upper <- y$upper
+
+v$R0_ancestry_median <- z$median
+v$R0_ancestry_lower <- z$lower
+v$R0_ancestry_upper <- z$upper
+
+write.csv(v, '../VBD-data/seroSites_Aaa_with_predictions.csv', row.names = F)
+
+v$predSero <- 1-(1/v$predictions)
+# v$pred_upper <- x$upper
+# v$pred_lower <- x$lower
+# v <- subset(v, Seroprevalence < 60)
+
+boxplot(v$Seroprevalence~v$Country)
+points(v$Country, v$predSero)
+
+plot(v$Seroprevalence, v$predSero*100, pch = 16)
+
+plot(v$Seroprevalence, v$predictions, pch = 16) #, xlim = c(0,50)
+abline(lm(v$predictions~v$Seroprevalence))
+
+plot(v$Seroprevalence[v$Neutralizing_antibodies=='Yes'], v$predictions[v$Neutralizing_antibodies=='Yes'], pch = 16)
+abline(lm(v$predictions[v$Neutralizing_antibodies=='Yes']~v$Seroprevalence[v$Neutralizing_antibodies=='Yes']))
+
+plot(v$R0_ancestry_median[v$aaa2015<0.2], v$predictions[v$aaa2015<0.2], pch = 16)
+
+plot(1/(1-v$Seroprevalence/100), v$predictions, pch = 16, xlim = c(1,1.5))
+
+test <- subset(v, predictions > 1)
+test <- subset(v, aaa2015 > 0.15)
+
+plot(v$bio8_20, v$Seroprevalence, pch = 16)
+plot(v$Seroprevalence, v$aaa2015, pch = 16, xlab = 'Seroprevalence', ylab = 'aaa')
