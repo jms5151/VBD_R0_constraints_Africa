@@ -17,7 +17,25 @@ r0_mod <- readRDS('../models/stan_model_fit_zikv.rds')
 load('../VBD-data/model_data_zikv.RData')
 mod_data <- model_data_zikv
 
-# extract samples
+# summary statistics ---------------------------------------------
+# Extract summary from the STAN fit object
+fit_summary <- summary(r0_mod)
+
+# Extract the summary statistics
+summary_stats <- fit_summary$summary
+summary_stats <- summary_stats[1:28, ]
+
+# Extract Rhat and ESS
+rhat <- round(summary_stats[, "Rhat"], 2)
+ess <- summary_stats[, "n_eff"]
+
+# Create a dataframe with the diagnostics
+diagnostics_df <- data.frame(Parameter = rownames(summary_stats), Rhat = rhat, ESS = ess)
+
+# save
+write.csv(diagnostics_df, '../VBD-data/model_diagnostics.csv', row.names = F)
+
+# extract samples ------------------------------------------------
 list_of_draws <- rstan::extract(r0_mod)
 
 # functions --------------------------------------------------------------------
@@ -154,6 +172,33 @@ overlay_distributions_plot <- function(mod, param_name, type, priorValue1, prior
   }
 }
 
+validation_plot <- function(df, xval, yval){
+  xupper <- 'sePrev_Upper'
+  xlower <- 'sePrev_Lower'
+  yupper <- gsub('_median', '_upper', yval)
+  ylower <- gsub('_median', '_lower', yval)
+  
+  # Calculate regression line and R-squared value
+  fit <- lm(df[, yval] ~ df[, xval])
+  rsquared <- summary(fit)$r.squared
+  
+  ggplot(df, aes_string(x = xval, y = yval)) +
+    # geom_errorbarh(aes(xmax = df[, xupper], xmin = df[, xlower]), col = 'darkgrey') +
+    geom_errorbar(aes(ymax = df[, yupper], ymin = df[, ylower]), col = 'darkgrey') +
+    geom_point(size = 2, color = 'black') +
+    geom_smooth(method = 'lm', se = FALSE, color = 'black', fullrange = TRUE) + # Extend the line
+    annotate("text", x = 2, y = 3.4, # Move text to upper left
+             label = bquote(paste("R"^2, " = ", .(sprintf("%.2f", rsquared)))), 
+             hjust = 0, vjust = 1, col = 'black') +
+    theme_bw() +
+    theme(text = element_text(size = 14)) +
+    xlab('Seroprevalence') +
+    ylab(expression(paste('Model estimated  ', R[0]))) +
+    ylim(0,3.5) +
+    geom_text_repel(aes(label = site)) +
+    theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm")) +
+    ggtitle(gsub('_median', ' model', yval))
+}
 
 
 # trace plots ------------------------------------------------------
@@ -216,6 +261,9 @@ for(i in 1:length(params)){
 }
 
 write.csv(param95ci, '../trait_fits.csv', row.names = F)
+
+# Rhat and ESS -----------------------------------------------------
+rhat_ess <- as.data.frame(r0_mod)
 
 # ppc plots --------------------------------------------------------
 
@@ -304,17 +352,17 @@ siteR0Estimates <- surveys_r0_ancestry %>%
 ## Save here for new R0 values
 write.csv(siteR0Estimates, '../VBD-data/New_R0_values.csv', row.names  =  F)
 
-Full_v_Anc <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Ancestry_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Ancestry model  ', R[0])))
-Full_v_Clim <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Climate_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Climate model  ', R[0])))
-Omega_v_pMI <- plotWithUncertainty(df = siteR0Estimates, xval = 'omega_median', yval = 'pMI_median') + xlab(expression(paste('Ancestry model  ', R[0], ' (omega only)'))) + ylab(expression(paste('Ancestry model  ', R[0], ' (pMI only)')))
-
-# N with R0 > 1 / model
-sum(siteR0Estimates$Climate_median>1)
-sum(siteR0Estimates$Ancestry_median>1)
-sum(siteR0Estimates$omega_median>1)
-sum(siteR0Estimates$pMI_median>1)
-sum(siteR0Estimates$Full_median>1)
-siteR0Estimates$site[which(siteR0Estimates$Full_median>1)]
+# Full_v_Anc <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Ancestry_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Ancestry model  ', R[0])))
+# Full_v_Clim <- plotWithUncertainty(df = siteR0Estimates, xval = 'Full_median', yval = 'Climate_median') + xlab(expression(paste('Full model  ', R[0]))) + ylab(expression(paste('Climate model  ', R[0])))
+# Omega_v_pMI <- plotWithUncertainty(df = siteR0Estimates, xval = 'omega_median', yval = 'pMI_median') + xlab(expression(paste('Ancestry model  ', R[0], ' (omega only)'))) + ylab(expression(paste('Ancestry model  ', R[0], ' (pMI only)')))
+# 
+# # N with R0 > 1 / model
+# sum(siteR0Estimates$Climate_median>1)
+# sum(siteR0Estimates$Ancestry_median>1)
+# sum(siteR0Estimates$omega_median>1)
+# sum(siteR0Estimates$pMI_median>1)
+# sum(siteR0Estimates$Full_median>1)
+# siteR0Estimates$site[which(siteR0Estimates$Full_median>1)]
 
 # contour plot -------------
 contour_samps <- concatAncestrySamples(validationName = 'contour', genQuantName = 'R0_full_new', percentiles = 50)
@@ -337,8 +385,8 @@ r0_contours <- plot_grid(anc_r0_plot, temp_r0_plot, contourPlot, ncol = 3, rel_w
 ggsave('figures/r0_and_contours.pdf', r0_contours, width = 12, height = 4)
 
 # combine scatter and contour plots and save
-surveyValidationPlots <- ggarrange(Full_v_Anc, Full_v_Clim, Omega_v_pMI, contourPlot, ncol = 2, nrow = 2, labels = c('A', 'B', 'C', 'D'))
-ggsave('figures/fig1.pdf', surveyValidationPlots, width = 12, height = 9)
+# surveyValidationPlots <- ggarrange(Full_v_Anc, Full_v_Clim, Omega_v_pMI, contourPlot, ncol = 2, nrow = 2, labels = c('A', 'B', 'C', 'D'))
+# ggsave('figures/fig1.pdf', surveyValidationPlots, width = 12, height = 9)
 
 # big cities through time ------------------------------------
 bc <- concatAncestrySamples(validationName = 'big_cities', genQuantName = 'R0_full_new', percentiles = 95)
@@ -423,7 +471,7 @@ bigCities <- ggarrange(lollipopPlot, africaMap, ncol = 2, labels = c('A', 'B'))
 # bigCities <- plot_grid(lollipopPlot, africaMap, ncol = 2)
 
 # save
-ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 14)
+# ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 14)
 
 # prior vs posterior plots -----------------------------------
 o_anc_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'omega_ancestry_constant', type = 'normal', priorValue1 = 0.5, priorValue2 = 1)
@@ -434,25 +482,25 @@ a_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_cli
 a_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmin', type = 'normal', priorValue1 =  13.35, priorValue2 = 1)
 a_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_Tmax', type = 'normal', priorValue1 = 40.08, priorValue2 = 1)
 # a_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'alpha_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
-b_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_constant', type = 'normal', priorValue1 = 8.49E-04, priorValue2 = 0.01)
-b_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmin', type = 'normal', priorValue1 = 17.05, priorValue2 = 20)
-b_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmax', type = 'normal', priorValue1 = 35.83, priorValue2 = 20)
+b_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_constant', type = 'normal', priorValue1 = 8.49E-04, priorValue2 = 1)
+b_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmin', type = 'normal', priorValue1 = 17.05, priorValue2 = 1)
+b_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_Tmax', type = 'normal', priorValue1 = 35.83, priorValue2 = 1)
 # b_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'b_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
-EIR_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_constant', type = 'normal', priorValue1 = 6.65E-05, priorValue2 = 0.01)
-EIR_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmin', type = 'normal', priorValue1 = 10.68, priorValue2 = 20)
-EIR_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmax', type = 'normal', priorValue1 = 45.90, priorValue2 = 20)
+EIR_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_constant', type = 'normal', priorValue1 = 6.65E-05, priorValue2 = 1)
+EIR_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmin', type = 'normal', priorValue1 = 10.68, priorValue2 = 1)
+EIR_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_Tmax', type = 'normal', priorValue1 = 45.90, priorValue2 = 1)
 # EIR_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'EIR_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
-lf_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_constant', type = 'normal', priorValue1 = -1.48E-01, priorValue2 = 0.1)
-lf_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmin', type = 'normal', priorValue1 = 9.16, priorValue2 = 20)
-lf_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmax', type = 'normal', priorValue1 = 37.73, priorValue2 = 20)
+lf_clim_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_constant', type = 'normal', priorValue1 = -1.48E-01, priorValue2 = 1)
+lf_clim_Tmin <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmin', type = 'normal', priorValue1 = 9.16, priorValue2 = 1)
+lf_clim_Tmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_Tmax', type = 'normal', priorValue1 = 37.73, priorValue2 = 1)
 # lf_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'lf_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
 pMI_anc_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_ancestry_constant', type = 'normal', priorValue1 = 0.5, priorValue2 = 1)
 pMI_anc_d <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_ancestry_d', type = 'normal', priorValue1 = 0.5, priorValue2 = 1)
 pMI_anc_e <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_ancestry_e', type = 'normal', priorValue1 = 0.5, priorValue2 = 1)
 # pMI_anc_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_ancestry_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
-pMI_clim_rmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_rmax', type = 'normal', priorValue1 = 0.24, priorValue2 = 0.03)
-pMI_clim_Topt <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Topt', type = 'normal', priorValue1 = 30.08, priorValue2 = 0.38)
-pMI_clim_a <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_a', type = 'normal', priorValue1 = 3.60, priorValue2 = 0.41)
+pMI_clim_rmax <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_rmax', type = 'normal', priorValue1 = 0.24, priorValue2 = 1)
+pMI_clim_Topt <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_Topt', type = 'normal', priorValue1 = 30.08, priorValue2 = 1)
+pMI_clim_a <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_a', type = 'normal', priorValue1 = 3.60, priorValue2 = 1)
 # pMI_clim_sig <- overlay_distributions_plot(mod = r0_mod, param_name = 'pMI_climate_sigma', type = 'uniform', priorValue1 = 0, priorValue2 = 100)
 
 p <- plot_grid(o_anc_const
@@ -486,53 +534,15 @@ p <- plot_grid(o_anc_const
 )
 ggsave('figures/prior_vs_posterior_plots.pdf', p, width = 11, height = 11)
 
+# seroprevalence validation ---------------------------------------------------
+serosurveys <- read.csv('../VBD-data/statistical_matches_values.csv')
 
-# R0 data
+matchType = 'ThirdMatch'
 
+p4 <- validation_plot(df = g1val, xval = matchType, yval = 'Climate_median')
+p5 <- validation_plot(df = g1val, xval = matchType, yval = 'Ancestry_median')
+p6 <- validation_plot(df = g1val, xval = matchType, yval = 'Full_median')
 
-# seroprevalence validation
-x <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = 'R0_full_new', percentiles = 95)
-y <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = 'R0_climate_new', percentiles = 95)
-z <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = 'R0_ancestry_new', percentiles = 95)
+seroval <- ggarrange(p4, p5, p6, ncol = 3, nrow = 1)
+ggsave(seroval, filename = 'figures/vaidation_all_serosurveys.pdf', width = 10, height = 5)
 
-v <- read.csv('../VBD-data/seroSites_Aaa.csv')
-
-v$R0_full_median <- x$median
-v$R0_full_lower <- x$lower
-v$R0_full_upper <- x$upper
-
-v$R0_climate_median <- y$median
-v$R0_climate_lower <- y$lower
-v$R0_climate_upper <- y$upper
-
-v$R0_ancestry_median <- z$median
-v$R0_ancestry_lower <- z$lower
-v$R0_ancestry_upper <- z$upper
-
-write.csv(v, '../VBD-data/seroSites_Aaa_with_predictions.csv', row.names = F)
-
-v$predSero <- 1-(1/v$predictions)
-# v$pred_upper <- x$upper
-# v$pred_lower <- x$lower
-# v <- subset(v, Seroprevalence < 60)
-
-boxplot(v$Seroprevalence~v$Country)
-points(v$Country, v$predSero)
-
-plot(v$Seroprevalence, v$predSero*100, pch = 16)
-
-plot(v$Seroprevalence, v$predictions, pch = 16) #, xlim = c(0,50)
-abline(lm(v$predictions~v$Seroprevalence))
-
-plot(v$Seroprevalence[v$Neutralizing_antibodies=='Yes'], v$predictions[v$Neutralizing_antibodies=='Yes'], pch = 16)
-abline(lm(v$predictions[v$Neutralizing_antibodies=='Yes']~v$Seroprevalence[v$Neutralizing_antibodies=='Yes']))
-
-plot(v$R0_ancestry_median[v$aaa2015<0.2], v$predictions[v$aaa2015<0.2], pch = 16)
-
-plot(1/(1-v$Seroprevalence/100), v$predictions, pch = 16, xlim = c(1,1.5))
-
-test <- subset(v, predictions > 1)
-test <- subset(v, aaa2015 > 0.15)
-
-plot(v$bio8_20, v$Seroprevalence, pch = 16)
-plot(v$Seroprevalence, v$aaa2015, pch = 16, xlab = 'Seroprevalence', ylab = 'aaa')

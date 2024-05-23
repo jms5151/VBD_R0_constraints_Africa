@@ -47,7 +47,7 @@ newdf <- rbind(df1, df2[,colnames(df1)])
 # all_covariates <- c('dens20', 'bio15_20', 'bio8_20') # , 'aaa2015'
 # direct_covariates <- c('bio8_20_scaled', 'aaa2015_scaled')
 direct_covariates <- c('bio8_20', 'aaa2015')
-geog_covariates <- c('Lat', 'Lon')
+# geog_covariates <- c('Lat', 'Lon')
 
 # check quality of statistical matches
 check_stat_match <- function(cNames, d, N){
@@ -76,7 +76,7 @@ rN = 3
 # check_stat_match(cNames = all_covariates, d = 'glm', N = rN) 
 # check_stat_match(cNames = all_covariates, d = 'mahalanobis', N = rN)
 
-check_stat_match(cNames = direct_covariates, d = 'euclidean', N = rN)
+check_stat_match(cNames = direct_covariates, d = 'glm', N = rN)
 # check_stat_match(cNames = direct_covariates, d = 'mahalanobis', N = rN)
 
 # check_stat_match(cNames = geog_covariates, d = 'glm', N = rN)
@@ -121,6 +121,7 @@ create_matches <- function(covariates, d, N) {
 
 # Create matches for direct covariates
 g1 <- create_matches(direct_covariates, 'glm', N = rN)
+write.csv(g1, '../VBD-data/statistical_site_matches.csv', row.names = F)
 # g2 <- create_matches(direct_covariates, 'mahalanobis', N = rN)
 
 # e1 <- create_matches(geog_covariates, 'euclidean', N = rN)
@@ -145,21 +146,21 @@ g1 <- create_matches(direct_covariates, 'glm', N = rN)
 # validation
 
 # Function to calculate standard error for each row
-calculate_standard_error <- function(row_values) {
-  # Remove NA values
-  row_values <- na.omit(row_values)
-  # Calculate standard deviation
-  sd_value <- sd(row_values)
-  # Calculate number of samples
-  n <- length(row_values)
-  if(n == 3){
-    # Calculate standard error
-    se <- sd_value / sqrt(n)
-  } else {
-    se <- 0
-  }
-  return(se)
-}
+# calculate_standard_error <- function(row_values) {
+#   # Remove NA values
+#   row_values <- na.omit(row_values)
+#   # Calculate standard deviation
+#   sd_value <- sd(row_values)
+#   # Calculate number of samples
+#   n <- length(row_values)
+#   if(n == 3){
+#     # Calculate standard error
+#     se <- sd_value / sqrt(n)
+#   } else {
+#     se <- 0
+#   }
+#   return(se)
+# }
 
 # read in modeled results
 r0_modeled <- read.csv('../VBD-data/New_R0_values.csv') #  '../VBD-data/R0_all_models_sites.csv'
@@ -196,19 +197,20 @@ create_validation_df <- function(statmatch){
   vr0[vr0$site == 'CapeVerde',c('FirstMatch', 'SecondMatch', 'ThirdMatch')] <- 10.9
   # vr0[vr0$site == 'Thailand',c('FirstMatch', 'SecondMatch', 'ThirdMatch')] <- 26.57 # average of neutralizing#26.27#23.5# ##average of all studies # placeholder
   
-  # calculate means and standard errors for matches for each site
-  vr0$meanPrev <- rowMeans(vr0[,c('FirstMatch', 'SecondMatch', 'ThirdMatch')], na.rm = T)
-  vr0$medPrev <- apply(vr0[, c('FirstMatch', 'SecondMatch', 'ThirdMatch')], 1, median, na.rm = TRUE)
-  # Apply the function to each row
-  vr0$sePrev <- apply(vr0[,c('FirstMatch', 'SecondMatch', 'ThirdMatch')], 1, calculate_standard_error)
-  vr0$sePrev_Upper <- vr0$meanPrev + vr0$sePrev
-  vr0$sePrev_Lower <- vr0$meanPrev - vr0$sePrev
+  # # calculate means and standard errors for matches for each site
+  # vr0$meanPrev <- rowMeans(vr0[,c('FirstMatch', 'SecondMatch', 'ThirdMatch')], na.rm = T)
+  # vr0$medPrev <- apply(vr0[, c('FirstMatch', 'SecondMatch', 'ThirdMatch')], 1, median, na.rm = TRUE)
+  # # Apply the function to each row
+  # vr0$sePrev <- apply(vr0[,c('FirstMatch', 'SecondMatch', 'ThirdMatch')], 1, calculate_standard_error)
+  # vr0$sePrev_Upper <- vr0$meanPrev + vr0$sePrev
+  # vr0$sePrev_Lower <- vr0$meanPrev - vr0$sePrev
  
   return(vr0) 
 }
 
 # m1val <- create_validation_df(statmatch = m1)
 g1val <- create_validation_df(statmatch = g1)
+write.csv(g1val, '../VBD-data/statistical_matches_values.csv', row.names = F)
 # e1val <- create_validation_df(statmatch = e1)
 
 # MPP$Prevalence <- ifelse(MPP$Match_Site=='Lare, Ethiopia', MPP$Prevalence2, MPP$Prevalence)

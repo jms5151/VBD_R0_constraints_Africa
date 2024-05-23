@@ -151,20 +151,20 @@ model {                                                         // Fit models to
   lf_climate_Tmax ~ normal(37.73,1);                            // prior for Tmax
   lf_climate_sigma ~ normal(0.01,0.1);                          // prior for sigma
 
-  // for(m in 1:lf_climate_N){
-  //   real lf_climate_mu = lf_climate_constant * (lf_climate_temp[m] - lf_climate_Tmax) * (lf_climate_temp[m] - lf_climate_Tmin);
-  //   lf_climate[m] ~ normal(lf_climate_mu, lf_climate_sigma);
-  // }
-  // if (lf_climate_Tmin > lf_climate_Tmax) {
-  //   target += positive_infinity();
-  // }
   for(m in 1:lf_climate_N){
-      real lf_climate_mu = lf_climate_constant * lf_climate_temp[m] * (lf_climate_temp[m] - lf_climate_Tmin) * sqrt(lf_climate_Tmax - lf_climate_temp[m]);
-      lf_climate[m] ~ normal(lf_climate_mu, lf_climate_sigma);
+    real lf_climate_mu = lf_climate_constant * (lf_climate_temp[m] - lf_climate_Tmax) * (lf_climate_temp[m] - lf_climate_Tmin);
+    lf_climate[m] ~ normal(lf_climate_mu, lf_climate_sigma);
   }
   if (lf_climate_Tmin > lf_climate_Tmax) {
     target += positive_infinity();
   }
+  // for(m in 1:lf_climate_N){
+  //     real lf_climate_mu = lf_climate_constant * lf_climate_temp[m] * (lf_climate_temp[m] - lf_climate_Tmin) * sqrt(lf_climate_Tmax - lf_climate_temp[m]);
+  //     lf_climate[m] ~ normal(lf_climate_mu, lf_climate_sigma);
+  // }
+  // if (lf_climate_Tmin > lf_climate_Tmax) {
+  //   target += positive_infinity();
+  // }
   
   // pMI ancestry (prob mosquito infection)
   pMI_ancestry_constant ~ normal(0.5,1);                         // prior for c
@@ -252,14 +252,14 @@ generated quantities {
   }
 
   // ppc lifespan (1/mosquito mortality rate)
-  // for (u in 1:lf_climate_N){
-  //   real lf_climate_mu_ppc = lf_climate_constant * (lf_climate_temp[u] - lf_climate_Tmax) * (lf_climate_temp[u] - lf_climate_Tmin);
-  //   lf_climate_ppc[u] = normal_rng(lf_climate_mu_ppc, lf_climate_sigma);
-  // }
   for (u in 1:lf_climate_N){
-    real lf_climate_mu_ppc = lf_climate_constant * lf_climate_temp[u] * (lf_climate_temp[u] - lf_climate_Tmin) * sqrt(lf_climate_Tmax - lf_climate_temp[u]);
+    real lf_climate_mu_ppc = lf_climate_constant * (lf_climate_temp[u] - lf_climate_Tmax) * (lf_climate_temp[u] - lf_climate_Tmin);
     lf_climate_ppc[u] = normal_rng(lf_climate_mu_ppc, lf_climate_sigma);
   }
+  // for (u in 1:lf_climate_N){
+  //   real lf_climate_mu_ppc = lf_climate_constant * lf_climate_temp[u] * (lf_climate_temp[u] - lf_climate_Tmin) * sqrt(lf_climate_Tmax - lf_climate_temp[u]);
+  //   lf_climate_ppc[u] = normal_rng(lf_climate_mu_ppc, lf_climate_sigma);
+  // }
 
   // ppc pMI ancestry (prob mosquito infection)
   for (rr in 1:pMI_ancestry_N){
@@ -304,18 +304,18 @@ generated quantities {
     }
 
     // lifespan (1/mosquito mortality rate)
-    // if(lf_climate_Tmin < temp_new[zz] && lf_climate_Tmax > temp_new[zz]){
-    //   lf_climate_new[zz] = normal_rng((lf_climate_constant * (temp_new[zz] - lf_climate_Tmax) * (temp_new[zz] - lf_climate_Tmin)), lf_climate_sigma);
-    // }
-    // else {
-    //   lf_climate_new[zz] = 0;
-    // }
     if(lf_climate_Tmin < temp_new[zz] && lf_climate_Tmax > temp_new[zz]){
-      lf_climate_new[zz] = normal_rng((lf_climate_constant * temp_new[zz] * (temp_new[zz] - lf_climate_Tmin) * sqrt(lf_climate_Tmax - temp_new[zz])), lf_climate_sigma);
+      lf_climate_new[zz] = normal_rng((lf_climate_constant * (temp_new[zz] - lf_climate_Tmax) * (temp_new[zz] - lf_climate_Tmin)), lf_climate_sigma);
     }
     else {
       lf_climate_new[zz] = 0;
     }
+    // if(lf_climate_Tmin < temp_new[zz] && lf_climate_Tmax > temp_new[zz]){
+    //   lf_climate_new[zz] = normal_rng((lf_climate_constant * temp_new[zz] * (temp_new[zz] - lf_climate_Tmin) * sqrt(lf_climate_Tmax - temp_new[zz])), lf_climate_sigma);
+    // }
+    // else {
+    //   lf_climate_new[zz] = 0;
+    // }
 
     // pMI ancestry (prob mosquito infection)
     pMI_ancestry_new[zz] = normal_rng(pMI_ancestry_constant + ((pMI_ancestry_d - pMI_ancestry_constant)/(1 + (pMI_ancestry_e / aa_new[zz]))), pMI_ancestry_sigma);
