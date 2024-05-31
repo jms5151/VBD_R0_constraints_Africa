@@ -85,9 +85,10 @@ aaa_cities <- read.csv('../VBD-data/african_cities_1970_SSP585_1970_2020_and_209
 cityNames <- read.csv('../VBD-data/african_cities_latlon.csv')
 
 # format names
-aaa_cities$City <- cityNames$City
-aaa_cities$Country <- cityNames$Country
-
+aaa_cities <- aaa_cities %>%
+  select(-c('City', 'Country')) %>%
+  inner_join(cityNames)
+  
 # get multimodel mean aaa for 2100
 aaa_cities$aaa2100 <- rowMeans(aaa_cities[,c('aaa2100_INM.CM4.8'
                                              , 'aaa2100_INM.CM4.8'
@@ -174,6 +175,21 @@ contour <- contour %>%
     , 'validation_type' = 'contour'
   )
 
+# seroprevalence data
+sero <- read.csv('../VBD-data/seroSites_Aaa_v2.csv')
+
+sero_data <- sero %>%
+  mutate('anc' = sero$aaa2015
+         , 'temp' = sero$bio8_20
+         , 'Location' = paste0(sero$Site, ', ', sero$Country)
+         , 'lon' = sero$Lon
+         , 'lat' = sero$Lat
+         , 'year' = rep(NA, nrow(sero))
+         , 'validation_type' = 'seroprevalence'
+  )
+
+sero_data <- sero_data[, c('anc', 'temp', 'Location', 'lon', 'lat', 'year', 'validation_type')]
+
 # combine new data ---
 new_data <- do.call(rbind, list(
   anc_df
@@ -181,6 +197,7 @@ new_data <- do.call(rbind, list(
   , survey_new
   , big_cities
   , contour
+  , sero_data
 ))
 
 # combine all data to fit and generate data with Zika model

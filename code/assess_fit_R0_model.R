@@ -11,6 +11,7 @@ library(cowplot)
 library(rnaturalearth)
 library(latticeExtra)
 library(viridisLite)
+library(ggpubr)
 
 # open model
 r0_mod <- readRDS('../models/stan_model_fit_zikv.rds')
@@ -262,9 +263,6 @@ for(i in 1:length(params)){
 
 write.csv(param95ci, '../trait_fits.csv', row.names = F)
 
-# Rhat and ESS -----------------------------------------------------
-rhat_ess <- as.data.frame(r0_mod)
-
 # ppc plots --------------------------------------------------------
 
 # extract ppc samples and summarise
@@ -323,7 +321,47 @@ dev.off()
 anc_r0_plot <- r0_plot(validationName = 'ancestry', genQuantName = 'R0_ancestry_new')
 temp_r0_plot <- r0_plot(validationName = 'temperature', genQuantName = 'R0_climate_new')
 
-# points(v$bio8_20, v$Seroprevalence/20, pch = 16, ylim = c(0,100), xlim = c(10, 40))
+# MPP <- read.csv('../VBD-data/seroSites_Aaa.csv')
+# MPP$Match_Site <- paste(MPP$Site, MPP$Country, sep = ', ')
+# 
+# MPP$Ancestry <- ifelse(MPP$aaa2015 <= 0.001, 'Low', NA)
+# MPP$Ancestry <- ifelse(MPP$aaa2015 > 0.001 & MPP$aaa2015 <= 0.01, 'Transitioning', MPP$Ancestry)
+# MPP$Ancestry <- ifelse(MPP$aaa2015 > 0.01 & MPP$aaa2015 <= 0.05, 'Moderate', MPP$Ancestry)
+# # MPP$Ancestry <- ifelse(MPP$aaa2015 > 0.05 & MPP$aaa2015 <= 0.15, 'High', MPP$Ancestry)
+# MPP$Ancestry <- ifelse(MPP$aaa2015 > 0.05, 'Strong specialization', MPP$Ancestry)
+# 
+# MPP$Ancestry <- factor(MPP$Ancestry, levels = c('Low', 'Transitioning', 'Moderate', 'Strong specialization'))
+# MPP$Physicians_per_100000[is.na(MPP$Physicians_per_100000)] <-  min(MPP$Physicians_per_100000, na.rm = T)
+# m <- MPP
+# m <- subset(MPP, Neutralizing_antibodies == 'Yes')
+# m <- subset(m, Country != 'Madagascar')
+# m <- subset(m, Site != 'Oyo State')
+# m$phys <- m$Physicians_per_100000/5
+# 
+# # points(v$bio8_20, v$Seroprevalence/20, pch = 16, ylim = c(0,100), xlim = c(10, 40))
+# sero_plot_T <- temp_r0_plot + 
+#   geom_point(aes(x = m$bio8_20, y  = m$Seroprevalence/8, color = m$Ancestry), size = m$phys) +
+#   scale_y_continuous(sec.axis = sec_axis(~ .*8, name = "Seroprevalence")) +
+#   labs(color = 'Non-African\nmosquito ancestry')
+# 
+# ggplot() +
+#   geom_point(aes(x = m$bio8_20, y  = m$Seroprevalence/8, color = m$Ancestry), size = m$phys) +
+#   labs(color = 'Non-African\nmosquito ancestry') +
+#   theme_bw()
+# 
+# 
+# ggsave('figures/sero_v_r0_temp.pdf', plot = sero_plot_T, width = 10, height = 6)
+# 
+# 
+# m$Tsuit <- ifelse(m$bio8_20 <=21 | m$bio8_20 > 31, 'Low', NA)
+# m$Tsuit <- ifelse(m$bio8_20 > 21 & m$bio8_20 <= 26, 'Moderate', m$Tsuit)
+# m$Tsuit <- ifelse(m$bio8_20 > 26 & m$bio8_20 <= 31, 'High', m$Tsuit)
+# 
+# sero_plot_A <- anc_r0_plot +
+#   geom_point(aes(x = m$aaa2015, y = m$Seroprevalence/8, color = m$Tsuit), size = m$phys) +
+#   labs(color = 'Temperature suitability')
+# 
+# ggsave('figures/sero_v_r0_anc.pdf', plot = sero_plot_A, width = 10, height = 6)
 
 # survey site plots -----------------------------------------------------
 
@@ -471,7 +509,7 @@ bigCities <- ggarrange(lollipopPlot, africaMap, ncol = 2, labels = c('A', 'B'))
 # bigCities <- plot_grid(lollipopPlot, africaMap, ncol = 2)
 
 # save
-# ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 14)
+ggsave('figures/big_cities_1970-2100.pdf', bigCities, height = 7.5, width = 14)
 
 # prior vs posterior plots -----------------------------------
 o_anc_const <- overlay_distributions_plot(mod = r0_mod, param_name = 'omega_ancestry_constant', type = 'normal', priorValue1 = 0.5, priorValue2 = 1)
@@ -535,14 +573,70 @@ p <- plot_grid(o_anc_const
 ggsave('figures/prior_vs_posterior_plots.pdf', p, width = 11, height = 11)
 
 # seroprevalence validation ---------------------------------------------------
-serosurveys <- read.csv('../VBD-data/statistical_matches_values.csv')
+MPP <- read.csv('../VBD-data/seroSites_Aaa_v2.csv')
 
-matchType = 'ThirdMatch'
+validation_plot <- function(val_type, NT){
+  sero_full <- concatAncestrySamples(validationName = 'seroprevalence', genQuantName = val_type, percentiles = 95)
+  sero_full$Country <- MPP$Country
+  sero_full$Seroprevalence <- MPP$Seroprevalence
+  sero_full$NeutAnti <- MPP$Neutralizing_antibodies
 
-p4 <- validation_plot(df = g1val, xval = matchType, yval = 'Climate_median')
-p5 <- validation_plot(df = g1val, xval = matchType, yval = 'Ancestry_median')
-p6 <- validation_plot(df = g1val, xval = matchType, yval = 'Full_median')
+  sero <- sero_full %>%
+    # filter(anc < 0.2) %>%
+    group_by(Country, NeutAnti) %>%
+    summarise(S_median = median(Seroprevalence)
+              , S_5th = quantile(Seroprevalence, 0.25)
+              , S_95th = quantile(Seroprevalence, 0.75)
+              , R0_median = median(median)
+              , R0_5th = quantile(median, 0.25)
+              , R0_95th = quantile(median, 0.75))
+  
+  if(NT == 'Yes'){
+    sero <- sero %>%
+      filter(NeutAnti == 'Yes')
+  }
+  # Calculate regression line and R-squared value
+  fit <- lm(sero$S_median ~ sero$R0_median)
+  rsquared <- summary(fit)$r.squared
 
-seroval <- ggarrange(p4, p5, p6, ncol = 3, nrow = 1)
-ggsave(seroval, filename = 'figures/vaidation_all_serosurveys.pdf', width = 10, height = 5)
+  ggplot(sero, aes(x = S_median, y = R0_median)) +
+    geom_errorbarh(aes(xmin = S_5th, xmax = S_95th), col = 'darkgrey') +
+    geom_errorbar(aes(ymax = R0_95th, ymin = R0_5th), col = 'darkgrey') +
+    geom_point(size = 2, color = 'black') +
+    geom_smooth(method = 'lm', se = FALSE, color = 'black', fullrange = TRUE) + # Extend the line
+    annotate("text", x = 1, y = 2, # Move text to upper left
+             label = bquote(paste("R"^2, " = ", .(sprintf("%.2f", rsquared)))), 
+             hjust = 0, vjust = 1, col = 'black') +
+    theme_bw() +
+    theme(text = element_text(size = 14)) +
+    xlab('Seroprevalence') +
+    ylab(expression(paste('Model estimated  ', R[0]))) +
+    ylim(0,2) +
+    # geom_text_repel(aes(label = site)) +
+    theme(plot.margin = unit(c(1, 0.25, 0.25, 0.25), "cm"))
+}
+
+cplot <- validation_plot(val_type = 'R0_climate_new', NT = 'Yes') + ggtitle('Climate')
+aplot <- validation_plot(val_type = 'R0_ancestry_new', NT = 'Yes') + ggtitle('Ancestry')
+fplot <- validation_plot(val_type = 'R0_full_new', NT = 'Yes') + ggtitle('Full')
+serovalN <- ggarrange(cplot, aplot, fplot, ncol = 3, nrow = 1)
+# serovalN <- annotate_figure(serovalN, top = text_grob('Country-level predictions, neutralizing antibodies'))
+ggsave(serovalN, filename = 'figures/scatter_validation_serosurveys_neutralizing_by_country.pdf', width = 10, height = 5)
+
+cplot2 <- validation_plot(val_type = 'R0_climate_new', NT = 'No') + ggtitle('Climate')
+aplot2 <- validation_plot(val_type = 'R0_ancestry_new', NT = 'No') + ggtitle('Ancestry')
+fplot2 <- validation_plot(val_type = 'R0_full_new', NT = 'No') + ggtitle('Full')
+seroval <- ggarrange(cplot2, aplot2, fplot2, ncol = 3, nrow = 1)
+# seroval <- annotate_figure(seroval, top = text_grob('Country-level predictions, aaa<0.2'))
+ggsave(seroval, filename = 'figures/scatter_validation_serosurveys_all_by_country.pdf', width = 10, height = 5)
+
+oplot <- validation_plot(val_type = 'R0_ancestry_omega_new', NT = 'Yes') + ggtitle('Omega')
+pmiplot <- validation_plot(val_type = 'R0_ancestry_pMI_new', NT = 'Yes') + ggtitle('pMI')
+anc_sero_val <- ggarrange(oplot, pmiplot, ncol = 2, nrow = 1)
+ggsave(anc_sero_val, filename = 'figures/scatter_validation_serosurveys_neutralizing_omega_pMI.pdf', width = 10, height = 5)
+
+oplot2 <- validation_plot(val_type = 'R0_ancestry_omega_new', NT = 'No') + ggtitle('Omega')
+pmiplot2 <- validation_plot(val_type = 'R0_ancestry_pMI_new', NT = 'No') + ggtitle('pMI')
+anc_sero_val2 <- ggarrange(oplot2, pmiplot2, ncol = 2, nrow = 1)
+ggsave(anc_sero_val2, filename = 'figures/scatter_validation_serosurveys_all_omega_pMI.pdf', width = 10, height = 5)
 
