@@ -44,7 +44,7 @@ check_stat_match(cNames = direct_covariates, d = 'glm', N = rN)
 # check_stat_match(cNames = direct_covariates, d = 'mahalanobis', N = rN)
 # check_stat_match(cNames = direct_covariates, d = 'euclidean', N = rN)
 
-newdf2 <- readRDS('../VBD-data/matching_data.RData')
+newdf <- readRDS('../VBD-data/matching_data.RData')
 
 # Function to create statistical matches
 create_matches <- function(covariates, df, d, N, c) {
@@ -73,129 +73,7 @@ create_matches <- function(covariates, df, d, N, c) {
 
 rN = 1
 
-# ## try increasingly stringent calipers
-# newids <- sample(nrow(newdf))
-# df_boot <- newdf[newids,]
-g1 <- create_matches(df = df_boot, df1 = df1, covariates = direct_covariates, d = 'glm', N = rN, c = 0.004)
-g1$FirstMatch <- ifelse(g1$FirstMatch == 'NA, NA', NA, g1$FirstMatch)
-# sites_matched <- unlist(g1$site[!is.na(g1$FirstMatch)])
-# # sites_matched
-# g1[!is.na(g1$FirstMatch), c('site', 'FirstMatch')]
-# 
-# new_df <- df_boot
-# df1sub <- df1
-# final_df <- data.frame()
-# calipers = seq(0.005, 0.2, by = 0.0005)
-# for(i in calipers){
-#   if(sum(is.na(g1$FirstMatch))>0){
-#     sites_matched <- unlist(g1$site[!is.na(g1$FirstMatch)])
-#     final_df <- rbind(final_df, g1[!is.na(g1$FirstMatch), c('site', 'FirstMatch')])
-#     new_df <- new_df[new_df$Site != sites_matched,]
-#     df1sub <- df1sub[df1sub$Site != sites_matched,]
-#     g1 <- create_matches(df = new_df, df1 = df1sub, covariates = direct_covariates, d = 'glm', N = rN, c = i)
-#     g1$FirstMatch <- ifelse(g1$FirstMatch == 'NA, NA', NA, g1$FirstMatch)
-#   }
-# }
-# 
-# 
-# 
-# boot <- data.frame()
-# 
-# for(i in 1:3){
-#   i
-#   newids <- sample(nrow(newdf))
-#   df_boot <- newdf[newids,]
-#   g1 <- create_matches(df = df_boot, covariates = direct_covariates, d = 'glm', N = rN)
-#   for(ii in 1:nrow(MPP)){
-#     g1 <- data.frame(lapply(g1, function(x) {
-#       gsub(MPP$Match_Site[ii], MPP$Seroprevalence[ii], x)
-#     }))
-#   }
-#   g1val <- create_validation_df(statmatch = g1)
-#   # boot <- rbind(boot, g1)  
-#   g1val$FirstMatch <- as.numeric(g1val$FirstMatch)
-#   p4 <- plotWithUncertainty(df = g1val, xval = matchType, yval = 'Climate_median')
-#   p5 <- plotWithUncertainty(df = g1val, xval = matchType, yval = 'Ancestry_median')
-#   p6 <- plotWithUncertainty(df = g1val, xval = matchType, yval = 'Full_median')
-#   ggarrange(p4, p5, p6, ncol = 3, nrow = 1)
-#   
-# }
-# 
-# boot$FirstMatch <- as.numeric(boot$FirstMatch)
-# 
-# bootstrapped_df <- boot %>%
-#   group_by(site) %>%
-#   summarise(q25 =  quantile(FirstMatch, 0.25, na.rm = T)
-#             , median = quantile(FirstMatch, 0.5, na.rm = T)
-#             , q75 =  quantile(FirstMatch, 0.75, na.rm = T)) %>%
-#   as.data.frame()
-# 
-# bootstrapped_df[nrow(bootstrapped_df)+1,] <- c('CapeVerde', 10.9, 10.9, 10.9)
-# bootstrapped_df[nrow(bootstrapped_df)+1,] <- c('Ouaga', 27.72, 27.72, 27.72)
-# 
-# x <- r0_modeled %>%
-#   left_join(bootstrapped_df)
-
-# newdf4 <- newdf %>%
-#   arrange('site')
-# newdf2 <- subset(newdf, Neutralizing_antibodies == 'Yes')
-set.seed(10309)
-
-calipers <- seq(0.001, 0.2, by = 0.001)
-# test for # matched sites
-# # unique matches
-# probably can be done 10 times?
-# cdf <- data.frame('Caliper_value' = NA, 'Sample' = NA, 'Num_matched_sites' = NA, 'Num_unique_matches' = NA)
-cdf <- data.frame('Caliper_value' = NA, 'Num_matched_sites' = NA, 'Num_unique_matches' = NA)
-
-# i = 0.009
-for(i in 1:length(calipers)){
-  # for(j in 1:10){
-    newids <- sample(nrow(newdf))
-    df_boot <- newdf[newids,]
-    g1 <- create_matches(df = df_boot, covariates = direct_covariates, d = 'glm', N = rN, c = calipers[i])
-    g1$FirstMatch <- ifelse(g1$FirstMatch == 'NA, NA', NA, g1$FirstMatch)
-    sites_matched <- unlist(g1$site[!is.na(g1$FirstMatch)])
-    unique_matches <- unique(unlist(g1$FirstMatch[!is.na(g1$FirstMatch)]))
-    cdf[i,] <- c(calipers[i], length(sites_matched), length(unique_matches))
-  #   cdf[i,] <- c(calipers[i], j, length(sites_matched), length(unique_matches))
-  # }
-}
-
-plot(cdf$Caliper_value, cdf$Num_matched_sites, type = 'l', ylab = 'Number of matched sites', xlab = 'Caliper value')
-plot(cdf$Caliper_value, cdf$Num_unique_matches, type = 'l', ylab = 'Unique matches', xlab = 'Caliper value')
-
-cal_val_to_use <- cdf$Caliper_value[which(cdf$Num_matched_sites == max(cdf$Num_matched_sites))][1]
-min_cal_val_to_use <- cdf$Caliper_value[which(cdf$Num_unique_matches == max(cdf$Num_unique_matches))[1]]
-
-boot_df <- data.frame('Iter' = NA, 'Climate_R2' = NA, 'Ancestry_R2' = NA, 'Full_R2' = NA)
-
-calcR2 <- function(df, yval, xval){
-  fit <- lm(df[, yval] ~ df[, xval])
-  rsquared <- summary(fit)$r.squared
-  return(rsquared)  
-}
-
-# Maybe need to do a combination of caliper and fit
-# c = 0.009
-for(i in 1:50){
-  newids <- sample(nrow(newdf))
-  df_boot <- newdf[newids,]
-  g1 <- create_matches(df = df_boot, covariates = direct_covariates, d = 'glm', N = rN, c = cal_val_to_use)
-  g1val <- create_validation_df(statmatch = g1)
-  # Calculate regression line and R-squared value
-  Cr2 <- calcR2(g1val, 'Climate_median', 'FirstMatch')  
-  Ar2 <- calcR2(g1val, 'Ancestry_median', 'FirstMatch')  
-  Fr2 <- calcR2(g1val, 'Full_median', 'FirstMatch')
-  boot_df[i,] <- c(i, Cr2, Ar2, Fr2)
-}
-
-boot_summary <- boot_df %>%
-  summarise_all(median)
-
-# newids <- sample(nrow(newdf))
-# df_boot <- newdf[newids,]
-g1 <- create_matches(df = df_boot, covariates = direct_covariates, d = 'glm', N = rN, c = cal_val_to_use)
+g1 <- create_matches(df = newdf, covariates = direct_covariates, d = 'glm', N = rN, c = cal_val_to_use)
 g1val <- create_validation_df(statmatch = g1)
 matchType = 'FirstMatch'
 p4 <- plotWithUncertainty(df = g1val, xval = matchType, yval = 'Climate_median')
