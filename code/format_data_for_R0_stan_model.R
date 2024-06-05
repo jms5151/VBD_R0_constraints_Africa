@@ -64,22 +64,6 @@ temp_df <- temp_new %>%
     , 'validation_type' = 'temperature'
   )
 
-# survey data ---
-survey_data <- read.csv('../VBD-data/combined_meta_allpops.csv')
-survey_data <- subset(survey_data, !is.na(prop_aaa_ancestry))
-
-# rename columns
-survey_data <- survey_data %>%
-  rename('anc' = 'prop_aaa_ancestry'
-         , 'temp' = 'bio.bio8_temp_wetq')
-
-survey_new <- survey_data[, c('anc', 'temp', 'Location')] %>%
-  mutate('lat' = rep(NA, nrow(survey_data))
-         , 'lon' = rep(NA, nrow(survey_data))
-         , 'year' = rep(NA, nrow(survey_data))
-         , 'validation_type' = 'surveys'
-         )
-
 # African cities time series data ---
 aaa_cities <- read.csv('../VBD-data/african_cities_1970_SSP585_1970_2020_and_2090-2100.csv')
 cityNames <- read.csv('../VBD-data/african_cities_latlon.csv')
